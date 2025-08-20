@@ -262,8 +262,8 @@ async def github_webhook(
 ):
     """Handle GitHub Actions webhook"""
     try:
-        # Parse the webhook payload using the provider
-        parsed_data = github_provider.parse_workflow_run(payload.dict())
+        # Parse the webhook payload
+        parsed_data = github_provider.parse_workflow_run(payload.model_dump())
         
         # Get or create provider
         repository = payload.repository
