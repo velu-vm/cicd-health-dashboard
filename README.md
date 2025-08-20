@@ -155,6 +155,139 @@ API Key: dev-write-key-change-in-production
 ### Default API Key
 For development: `dev-write-key-change-in-production`
 
+## GitHub Actions Workflows
+
+This repository includes comprehensive CI/CD workflows that automatically test, build, and validate your code on every push and pull request.
+
+### Available Workflows
+
+#### 1. CI/CD Pipeline (`.github/workflows/ci.yml`)
+**Triggers**: Push to `main`/`develop`, Pull Requests to `main`/`develop`
+
+**Jobs**:
+- **Backend Tests**: Python 3.11, pytest, coverage reporting
+- **Frontend Tests**: Node.js 18, npm tests, build validation
+- **Docker Validation**: Build all images, validate compose files, test startup
+- **Security Scan**: Trivy vulnerability scanning with SARIF output
+- **Lint & Format**: Black, isort, flake8, mypy for Python; ESLint for React
+- **Integration Test**: End-to-end API testing with live backend
+
+#### 2. Webhook Simulation (`.github/workflows/simulate-webhook.yml`)
+**Triggers**: Push to `main`/`develop` (excludes docs and README changes)
+
+**Purpose**: Automatically sends a GitHub Actions webhook payload to your backend on every code push, simulating real CI/CD pipeline events.
+
+### Required Repository Secrets
+
+To enable the webhook simulation workflow, you must configure these secrets in your GitHub repository:
+
+#### **Required Secrets**
+
+| Secret Name | Description | Example Value |
+|-------------|-------------|---------------|
+| `BACKEND_URL` | Full URL to your backend API | `https://your-dashboard.example.com` or `http://localhost:8000` |
+| `API_WRITE_KEY` | API key for backend write operations | `your-secure-api-key-here` |
+
+#### **How to Set Repository Secrets**
+
+1. **Navigate to your repository** on GitHub
+2. **Go to Settings** → **Secrets and variables** → **Actions**
+3. **Click "New repository secret"**
+4. **Add each secret** with the exact names above
+
+#### **Secret Configuration Examples**
+
+**For Local Development:**
+```
+BACKEND_URL: http://localhost:8000
+API_WRITE_KEY: dev-write-key-change-in-production
+```
+
+**For Production:**
+```
+BACKEND_URL: https://dashboard.yourcompany.com
+API_WRITE_KEY: prod-secure-key-12345
+```
+
+**For Staging:**
+```
+BACKEND_URL: https://staging-dashboard.yourcompany.com
+API_WRITE_KEY: staging-key-67890
+```
+
+### Workflow Features
+
+#### **Smart Triggering**
+- **CI Pipeline**: Runs on all code changes
+- **Webhook Simulation**: Only runs on code changes (excludes documentation updates)
+- **Conditional Execution**: Webhook workflow only runs when secrets are configured
+
+#### **Comprehensive Testing**
+- **Unit Tests**: Backend pytest, Frontend npm test
+- **Integration Tests**: Live API endpoint validation
+- **Docker Validation**: Image builds and compose file validation
+- **Security Scanning**: Vulnerability detection and reporting
+- **Code Quality**: Linting, formatting, and type checking
+
+#### **Artifact Management**
+- **Frontend Builds**: Uploaded as artifacts for deployment
+- **Test Coverage**: XML and terminal coverage reports
+- **Security Results**: SARIF format for GitHub Security tab
+
+### Workflow Status
+
+Monitor your workflows in the **Actions** tab of your GitHub repository:
+
+- **Green Checkmark** ✅: All tests passed
+- **Red X** ❌: Tests failed (click to see details)
+- **Yellow Circle** 🟡: Workflow in progress
+- **Gray Circle** ⚪: Workflow skipped (e.g., missing secrets)
+
+### Troubleshooting
+
+#### **Webhook Workflow Not Running**
+- **Check Secrets**: Ensure `BACKEND_URL` and `API_WRITE_KEY` are set
+- **Verify Triggers**: Workflow only runs on code pushes (not docs)
+- **Check Permissions**: Ensure GitHub Actions has access to secrets
+
+#### **Backend Connection Issues**
+- **URL Format**: Use full URLs including protocol (`https://` or `http://`)
+- **API Key**: Verify the key matches your backend configuration
+- **Network Access**: Ensure your backend is accessible from GitHub's runners
+
+#### **Test Failures**
+- **Backend Tests**: Check Python version compatibility (3.11+)
+- **Frontend Tests**: Verify Node.js version (18+)
+- **Docker Tests**: Ensure Docker is available in the runner
+
+### Customization
+
+#### **Modify Trigger Branches**
+Edit the `on.push.branches` section in each workflow file:
+```yaml
+on:
+  push:
+    branches: [ main, develop, feature/* ]  # Add your branches
+```
+
+#### **Add Environment-Specific Secrets**
+For different environments, use environment secrets:
+```yaml
+jobs:
+  deploy:
+    environment: production
+    secrets: inherit
+```
+
+#### **Customize Test Commands**
+Modify the test steps to match your project's testing strategy:
+```yaml
+- name: Run custom tests
+  run: |
+    python -m pytest tests/ --custom-flag
+    npm run test:custom
+```
+
 ## Environment Configuration
 
 ### Backend Environment Variables

@@ -1,0 +1,129 @@
+name: Simulate Webhook
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - '.github/**'
+
+jobs:
+  simulate-webhook:
+    name: Simulate GitHub Actions Webhook
+    runs-on: ubuntu-latest
+    if: ${{ secrets.BACKEND_URL != '' && secrets.API_WRITE_KEY != '' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install httpx
+        
+    - name: Create webhook payload
+      run: |
+        cat > webhook_payload.json << 'EOF'
+        {
+          "workflow_run": {
+            "id": ${{ github.run_id }},
+            "name": "CI/CD Pipeline",
+            "head_branch": "${{ github.ref_name }}",
+            "head_sha": "${{ github.sha }}",
+            "run_number": ${{ github.run_number }},
+            "event": "push",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "created_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+            "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+            "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+            "triggering_actor": {
+              "login": "${{ github.actor }}",
+              "id": ${{ github.actor_id }},
+              "type": "User"
+            }
+          },
+          "workflow": {
+            "id": ${{ github.workflow_id }},
+            "name": "CI/CD Pipeline",
+            "path": ".github/workflows/ci.yml",
+            "state": "active"
+          },
+          "repository": {
+            "id": ${{ github.event.repository.id }},
+            "name": "${{ github.event.repository.name }}",
+            "full_name": "${{ github.repository }}",
+            "private": ${{ github.event.repository.private }},
+            "owner": {
+              "login": "${{ github.event.repository.owner.login }}",
+              "id": ${{ github.event.repository.owner.id }},
+              "type": "${{ github.event.repository.owner.type }}"
+            }
+          },
+          "sender": {
+            "login": "${{ github.actor }}",
+            "id": ${{ github.actor_id }},
+            "type": "User"
+          }
+        }
+        EOF
+        
+    - name: Send webhook to backend
+      run: |
+        echo "Sending webhook to: ${{ secrets.BACKEND_URL }}/api/webhook/github-actions"
+        echo "API Key: ${{ secrets.API_WRITE_KEY != '' && '***SET***' || 'NOT SET' }}"
+        
+        response=$(curl -s -w "\n%{http_code}" \
+          -X POST "${{ secrets.BACKEND_URL }}/api/webhook/github-actions" \
+          -H "Content-Type: application/json" \
+          -H "X-API-KEY: ${{ secrets.API_WRITE_KEY }}" \
+          -d @webhook_payload.json)
+        
+        # Extract response body and status code
+        body=$(echo "$response" | head -n -1)
+        status_code=$(echo "$response" | tail -n 1)
+        
+        echo "Response Status: $status_code"
+        echo "Response Body: $body"
+        
+        # Check if the request was successful
+        if [ "$status_code" -eq 200 ]; then
+          echo "✅ Webhook sent successfully!"
+        else
+          echo "❌ Webhook failed with status: $status_code"
+          echo "Response: $body"
+          exit 1
+        fi
+        
+    - name: Verify webhook processing
+      run: |
+        echo "Waiting for webhook processing..."
+        sleep 5
+        
+        # Try to fetch the build that should have been created
+        if curl -s -f "${{ secrets.BACKEND_URL }}/api/builds?limit=1" > /dev/null; then
+          echo "✅ Backend is responding to API requests"
+          
+          # Check if we can get build details
+          builds_response=$(curl -s "${{ secrets.BACKEND_URL }}/api/builds?limit=1")
+          echo "Builds response: $builds_response"
+        else
+          echo "❌ Backend is not responding to API requests"
+          exit 1
+        fi
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f webhook_payload.json
