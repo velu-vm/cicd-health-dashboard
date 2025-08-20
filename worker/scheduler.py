@@ -1,182 +1,196 @@
+#!/usr/bin/env python3
+"""
+CI/CD Health Dashboard Worker Scheduler
+
+Entry point: python scheduler.py
+
+This script runs the worker scheduler that polls CI/CD providers
+and updates the dashboard via API calls.
+
+Environment variables:
+- ENABLE_GH: Enable GitHub Actions polling (default: true)
+- ENABLE_JENKINS: Enable Jenkins polling (default: false)
+- WORKER_POLL_INTERVAL: Polling interval in seconds (default: 60)
+- WORKER_JITTER_SECONDS: Jitter to avoid thundering herd (default: 10)
+- GITHUB_TOKEN: GitHub personal access token
+- GITHUB_REPOS: Comma-separated list of owner/repo pairs
+- JENKINS_URL: Jenkins server URL
+- JENKINS_USERNAME: Jenkins username
+- JENKINS_API_TOKEN: Jenkins API token
+- JENKINS_JOBS: Comma-separated list of job names
+- DASHBOARD_API_URL: Dashboard API base URL (default: http://localhost:8000)
+- DASHBOARD_API_KEY: Dashboard API write key
+"""
+
+import os
 import asyncio
 import logging
-from typing import Dict, Any, Callable, Coroutine
-from datetime import datetime, timedelta
-import functools
+import random
+from typing import Optional
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
+from dotenv import load_dotenv
 
+from .poller import CICDPoller
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-class TaskScheduler:
-    """Task scheduler for background jobs"""
+class WorkerScheduler:
+    """Schedules and manages CI/CD provider polling jobs"""
     
     def __init__(self):
-        self.tasks: Dict[str, asyncio.Task] = {}
+        self.scheduler = AsyncIOScheduler()
+        self.poller = CICDPoller()
         self.running = False
         
+        # Configuration from environment
+        self.poll_interval = int(os.getenv("WORKER_POLL_INTERVAL", "60"))  # seconds
+        self.enable_github = os.getenv("ENABLE_GH", "true").lower() == "true"
+        self.enable_jenkins = os.getenv("ENABLE_JENKINS", "false").lower() == "true"
+        self.jitter_seconds = int(os.getenv("WORKER_JITTER_SECONDS", "10"))  # jitter to avoid thundering herd
+        
+        # Add event listeners
+        self.scheduler.add_listener(self._job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+    
     async def start(self):
         """Start the scheduler"""
-        logger.info("Starting Task Scheduler")
-        self.running = True
+        if self.running:
+            logger.warning("Scheduler is already running")
+            return
         
-        # Start scheduled tasks
-        await self.schedule_periodic_tasks()
+        logger.info("Starting CI/CD Worker Scheduler")
+        logger.info(f"Poll interval: {self.poll_interval} seconds")
+        logger.info(f"GitHub Actions enabled: {self.enable_github}")
+        logger.info(f"Jenkins enabled: {self.enable_jenkins}")
+        logger.info(f"Jitter: {self.jitter_seconds} seconds")
         
         try:
+            # Start the scheduler
+            self.scheduler.start()
+            self.running = True
+            
+            # Add the main polling job
+            await self._add_polling_job()
+            
+            logger.info("Scheduler started successfully")
+            
+            # Keep the scheduler running
             while self.running:
                 await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Received shutdown signal")
+                
+        except Exception as e:
+            logger.error(f"Failed to start scheduler: {e}")
+            raise
         finally:
             await self.stop()
     
     async def stop(self):
-        """Stop the scheduler and cancel all tasks"""
-        logger.info("Stopping Task Scheduler")
-        self.running = False
-        
-        # Cancel all running tasks
-        for task_name, task in self.tasks.items():
-            if not task.done():
-                logger.info(f"Cancelling task: {task_name}")
-                task.cancel()
-        
-        # Wait for all tasks to complete
-        if self.tasks:
-            await asyncio.gather(*self.tasks.values(), return_exceptions=True)
-        
-        logger.info("Task Scheduler stopped")
-    
-    async def schedule_periodic_tasks(self):
-        """Schedule all periodic tasks"""
-        # Schedule pipeline health checks every 5 minutes
-        self.schedule_task(
-            "pipeline_health_check",
-            self.pipeline_health_check,
-            interval_seconds=300
-        )
-        
-        # Schedule cleanup tasks every hour
-        self.schedule_task(
-            "cleanup_old_data",
-            self.cleanup_old_data,
-            interval_seconds=3600
-        )
-        
-        # Schedule metrics collection every 15 minutes
-        self.schedule_task(
-            "collect_metrics",
-            self.collect_metrics,
-            interval_seconds=900
-        )
-    
-    def schedule_task(
-        self, 
-        name: str, 
-        func: Callable[[], Coroutine[Any, Any, None]], 
-        interval_seconds: int,
-        delay_seconds: int = 0
-    ):
-        """Schedule a periodic task"""
-        if name in self.tasks and not self.tasks[name].done():
-            logger.warning(f"Task {name} is already scheduled")
+        """Stop the scheduler"""
+        if not self.running:
             return
         
-        async def periodic_wrapper():
-            # Initial delay
-            if delay_seconds > 0:
-                await asyncio.sleep(delay_seconds)
+        logger.info("Stopping CI/CD Worker Scheduler")
+        self.running = False
+        
+        try:
+            # Shutdown the scheduler
+            self.scheduler.shutdown(wait=True)
             
-            while self.running:
-                try:
-                    start_time = datetime.now()
-                    logger.info(f"Starting scheduled task: {name}")
-                    
-                    await func()
-                    
-                    duration = (datetime.now() - start_time).total_seconds()
-                    logger.info(f"Completed scheduled task: {name} in {duration:.2f}s")
-                    
-                except Exception as e:
-                    logger.error(f"Error in scheduled task {name}: {e}")
-                
-                # Wait for next execution
-                await asyncio.sleep(interval_seconds)
-        
-        task = asyncio.create_task(periodic_wrapper())
-        self.tasks[name] = task
-        logger.info(f"Scheduled task: {name} (every {interval_seconds}s)")
-    
-    async def pipeline_health_check(self):
-        """Check health of all pipelines"""
-        logger.info("Running pipeline health check")
-        
-        # This would integrate with the main application
-        # For now, just log the action
-        try:
-            # Simulate health check
-            await asyncio.sleep(1)
-            logger.info("Pipeline health check completed")
+            # Close the poller
+            await self.poller.close()
+            
+            logger.info("Scheduler stopped successfully")
+            
         except Exception as e:
-            logger.error(f"Pipeline health check failed: {e}")
+            logger.error(f"Error stopping scheduler: {e}")
     
-    async def cleanup_old_data(self):
-        """Clean up old build and alert data"""
-        logger.info("Running data cleanup")
-        
+    async def _add_polling_job(self):
+        """Add the main polling job to the scheduler"""
         try:
-            # This would clean up old data from the database
-            # For now, just log the action
-            await asyncio.sleep(1)
-            logger.info("Data cleanup completed")
+            # Add jitter to avoid thundering herd
+            jitter = random.randint(0, self.jitter_seconds)
+            
+            # Schedule the job
+            self.scheduler.add_job(
+                func=self._execute_polling_cycle,
+                trigger=IntervalTrigger(
+                    seconds=self.poll_interval,
+                    jitter=jitter
+                ),
+                id="cicd_polling_job",
+                name="CI/CD Provider Polling",
+                max_instances=1,  # Prevent overlapping executions
+                coalesce=True,    # Combine missed executions
+                misfire_grace_time=300  # 5 minutes grace time
+            )
+            
+            logger.info(f"Added polling job with {self.poll_interval}s interval and {jitter}s jitter")
+            
         except Exception as e:
-            logger.error(f"Data cleanup failed: {e}")
+            logger.error(f"Failed to add polling job: {e}")
+            raise
     
-    async def collect_metrics(self):
-        """Collect system and pipeline metrics"""
-        logger.info("Collecting metrics")
-        
+    async def _execute_polling_cycle(self):
+        """Execute a single polling cycle"""
         try:
-            # This would collect various metrics
-            # For now, just log the action
-            await asyncio.sleep(1)
-            logger.info("Metrics collection completed")
+            logger.info("Executing polling cycle")
+            
+            # Check if providers are enabled
+            if not self.enable_github and not self.enable_jenkins:
+                logger.warning("No providers enabled, skipping polling cycle")
+                return
+            
+            # Execute the polling
+            await self.poller.poll_all_providers()
+            
+            logger.info("Polling cycle completed successfully")
+            
         except Exception as e:
-            logger.error(f"Metrics collection failed: {e}")
+            logger.error(f"Error in polling cycle: {e}")
+            # Don't re-raise - let the scheduler handle it
     
-    def cancel_task(self, name: str):
-        """Cancel a specific scheduled task"""
-        if name in self.tasks:
-            task = self.tasks[name]
-            if not task.done():
-                task.cancel()
-                logger.info(f"Cancelled task: {name}")
-            del self.tasks[name]
-        else:
-            logger.warning(f"Task {name} not found")
+    def _job_listener(self, event):
+        """Handle job execution events"""
+        if event.code == EVENT_JOB_EXECUTED:
+            logger.debug(f"Job {event.job_id} executed successfully")
+        elif event.code == EVENT_JOB_ERROR:
+            logger.error(f"Job {event.job_id} failed: {event.exception}")
+            logger.error(f"Traceback: {event.traceback}")
     
-    def get_task_status(self) -> Dict[str, str]:
-        """Get status of all scheduled tasks"""
-        status = {}
-        for name, task in self.tasks.items():
-            if task.done():
-                if task.cancelled():
-                    status[name] = "cancelled"
-                elif task.exception():
-                    status[name] = f"failed: {task.exception()}"
-                else:
-                    status[name] = "completed"
-            else:
-                status[name] = "running"
-        return status
+    async def run_once(self):
+        """Run a single polling cycle (useful for testing)"""
+        logger.info("Running single polling cycle")
+        await self.poller.poll_all_providers()
+        logger.info("Single polling cycle completed")
 
 async def main():
-    """Main entry point for the scheduler"""
-    scheduler = TaskScheduler()
+    """Main entry point for the worker scheduler"""
+    scheduler = WorkerScheduler()
     
     try:
         await scheduler.start()
     except KeyboardInterrupt:
+        logger.info("Received shutdown signal")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise
+    finally:
         await scheduler.stop()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Worker scheduler stopped by user")
+    except Exception as e:
+        logger.error(f"Worker scheduler failed: {e}")
+        exit(1)
