@@ -1,65 +1,105 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Float, ForeignKey, JSON
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from .db import Base
+from datetime import datetime
+
+Base = declarative_base()
 
 class Provider(Base):
+    """CI/CD tool provider (GitHub Actions, Jenkins, etc.)"""
     __tablename__ = "providers"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, unique=True)
-    kind = Column(String(50), nullable=False)  # github_actions
-    config_json = Column(JSON)  # Provider-specific configuration
+    name = Column(String, unique=True, index=True, nullable=False)
+    kind = Column(String, nullable=False)  # github_actions, jenkins, gitlab, etc.
+    config_json = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     builds = relationship("Build", back_populates="provider")
 
 class Build(Base):
+    """Individual CI/CD build/pipeline execution"""
     __tablename__ = "builds"
     
     id = Column(Integer, primary_key=True, index=True)
-    provider_id = Column(Integer, ForeignKey("providers.id"), nullable=False)
-    external_id = Column(String(255), nullable=False)  # External build ID from provider
-    status = Column(String(50), nullable=False)  # success, failed, running, queued
-    duration_seconds = Column(Integer)  # Build duration in seconds
-    branch = Column(String(100), default="main")
-    commit_sha = Column(String(100))
-    triggered_by = Column(String(255))  # User who triggered the build
-    started_at = Column(DateTime(timezone=True))
-    finished_at = Column(DateTime(timezone=True))
-    url = Column(String(500))  # Build URL
-    raw_payload = Column(JSON)  # Raw payload from provider
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    external_id = Column(String, nullable=False, index=True)  # Build ID from provider
+    status = Column(String, nullable=False, index=True)  # success, failed, running, queued, etc.
+    branch = Column(String, nullable=True, index=True)
+    commit_sha = Column(String, nullable=True)
+    triggered_by = Column(String, nullable=True)
+    url = Column(String, nullable=True)  # Link to build in provider
     
-    # Relationships
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    
+    # Provider relationship
+    provider_id = Column(Integer, ForeignKey("providers.id"), nullable=False)
     provider = relationship("Provider", back_populates="builds")
-    alerts = relationship("Alert", back_populates="build")
+    
+    # Raw data and metadata
+    raw_payload = Column(JSON, nullable=True)  # Original webhook payload
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class Alert(Base):
+    """Alert configuration and history"""
     __tablename__ = "alerts"
     
     id = Column(Integer, primary_key=True, index=True)
-    build_id = Column(Integer, ForeignKey("builds.id"), nullable=False)
-    channel = Column(String(50), nullable=False)  # email
-    sent_at = Column(DateTime(timezone=True), server_default=func.now())
-    success = Column(Boolean, default=True)  # Whether alert was sent successfully
-    message = Column(Text, nullable=False)
-    
-    # Relationships
-    build = relationship("Build", back_populates="alerts")
-
-class Settings(Base):
-    __tablename__ = "settings"
-    
-    id = Column(Integer, primary_key=True, default=1)
-    alert_email = Column(String(255))  # Email for alerts
-    api_write_key = Column(String(255))  # API key for write operations
+    type = Column(String, nullable=False)  # email, slack, webhook
+    name = Column(String, nullable=False)
+    config_json = Column(JSON, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-# Create indexes for performance
-Index('idx_builds_status_started', Build.status, Build.started_at)
-Index('idx_builds_provider_finished', Build.provider_id, Build.finished_at)
-Index('idx_builds_external_id', Build.external_id)
-Index('idx_alerts_build_id', Alert.build_id)
-Index('idx_providers_kind', Provider.kind)
+class AlertHistory(Base):
+    """History of sent alerts"""
+    __tablename__ = "alert_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=False)
+    build_id = Column(Integer, ForeignKey("builds.id"), nullable=True)
+    message = Column(Text, nullable=False)
+    severity = Column(String, nullable=False)  # info, warning, error, critical
+    status = Column(String, nullable=False)  # sent, failed, pending
+    error_message = Column(Text, nullable=True)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    alert = relationship("Alert")
+    build = relationship("Build")
+
+class Settings(Base):
+    """Application settings and configuration"""
+    __tablename__ = "settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False, index=True)
+    value = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class Metrics(Base):
+    """Aggregated metrics for dashboard"""
+    __tablename__ = "metrics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    metric_name = Column(String, nullable=False, index=True)
+    metric_value = Column(Float, nullable=False)
+    metric_unit = Column(String, nullable=True)
+    window_start = Column(DateTime(timezone=True), nullable=False)
+    window_end = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    class Meta:
+        indexes = [
+            ("metric_name", "window_start", "window_end")
+        ]

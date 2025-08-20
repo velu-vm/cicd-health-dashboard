@@ -1,189 +1,199 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Any
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 from datetime import datetime
+from enum import Enum
 
-# Base configuration for all models
-class BaseSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+# Enums
+class BuildStatus(str, Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+    RUNNING = "running"
+    QUEUED = "queued"
+    CANCELLED = "cancelled"
+    UNKNOWN = "unknown"
 
-# Pipeline schemas
-class PipelineBase(BaseSchema):
-    name: str
-    repository: str
-    owner: str
-    branch: str = "main"
-    workflow_file: Optional[str] = None
+class AlertType(str, Enum):
+    EMAIL = "email"
+    SLACK = "slack"
+    WEBHOOK = "webhook"
 
-class PipelineCreate(PipelineBase):
+class AlertSeverity(str, Enum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+# Base Models
+class ProviderBase(BaseModel):
+    name: str = Field(..., description="Provider name")
+    kind: str = Field(..., description="Provider type (github_actions, jenkins, etc.)")
+    config_json: Optional[Dict[str, Any]] = Field(None, description="Provider configuration")
+    is_active: bool = Field(True, description="Whether provider is active")
+
+class ProviderCreate(ProviderBase):
     pass
 
-class PipelineUpdate(BaseSchema):
-    name: Optional[str] = None
-    branch: Optional[str] = None
-    workflow_file: Optional[str] = None
-
-class Pipeline(PipelineBase):
+class Provider(ProviderBase):
     id: int
-    provider: str = "github_actions"
-    status: str
-    last_run_number: Optional[int] = None
-    last_run_url: Optional[str] = None
-    last_run_time: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
-# Workflow Run schemas
-class WorkflowRunBase(BaseSchema):
-    run_number: int
-    run_id: str
-    status: str
-    conclusion: Optional[str] = None
-    commit_hash: Optional[str] = None
-    commit_message: Optional[str] = None
-    author: Optional[str] = None
-    run_url: Optional[str] = None
-    workflow_name: Optional[str] = None
-    trigger: Optional[str] = None
-
-class WorkflowRunCreate(WorkflowRunBase):
-    pipeline_id: int
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    duration: Optional[int] = None
-    metadata: Optional[Any] = None
-
-class WorkflowRunUpdate(BaseSchema):
-    status: Optional[str] = None
-    conclusion: Optional[str] = None
-    end_time: Optional[datetime] = None
-    duration: Optional[int] = None
-    metadata: Optional[Any] = None
-
-class WorkflowRun(WorkflowRunBase):
-    id: int
-    pipeline_id: int
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    duration: Optional[int] = None
-    metadata: Optional[Any] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# Alert schemas
-class AlertBase(BaseSchema):
-    type: str
-    message: str
-    severity: str = "medium"
-
-class AlertCreate(AlertBase):
-    pipeline_id: int
-
-class AlertUpdate(BaseSchema):
-    is_active: Optional[bool] = None
-    resolved_at: Optional[datetime] = None
-
-class Alert(AlertBase):
-    id: int
-    pipeline_id: int
-    is_active: bool
-    created_at: datetime
-    resolved_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-# Health check schema
-class HealthCheck(BaseSchema):
-    ok: bool
-    timestamp: datetime
-    version: str
-
-# Summary metrics schemas
-class MetricsSummary(BaseSchema):
-    window_days: int = 7
-    success_rate: float = 0.0
-    failure_rate: float = 0.0
-    avg_build_time_seconds: Optional[float] = None  # in seconds
-    last_build_status: Optional[str] = None
-    last_updated: str = ""  # ISO8601 timestamp
-
-# Build schemas
-class BuildBase(BaseSchema):
-    external_id: str
-    status: str
-    branch: str = "main"
-    commit_sha: Optional[str] = None
-    triggered_by: Optional[str] = None
-    url: Optional[str] = None
-    provider_id: int
-    duration_seconds: Optional[int] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
-    raw_payload: Any
+class BuildBase(BaseModel):
+    external_id: str = Field(..., description="External build ID from provider")
+    status: BuildStatus = Field(..., description="Build status")
+    branch: Optional[str] = Field(None, description="Git branch")
+    commit_sha: Optional[str] = Field(None, description="Git commit SHA")
+    triggered_by: Optional[str] = Field(None, description="User who triggered the build")
+    url: Optional[str] = Field(None, description="Build URL in provider")
+    started_at: Optional[datetime] = Field(None, description="Build start time")
+    finished_at: Optional[datetime] = Field(None, description="Build finish time")
+    duration_seconds: Optional[float] = Field(None, description="Build duration in seconds")
+    raw_payload: Optional[Dict[str, Any]] = Field(None, description="Raw webhook payload")
 
 class BuildCreate(BuildBase):
-    pass
-
-class BuildUpdate(BaseSchema):
-    external_id: Optional[str] = None
-    status: Optional[str] = None
-    branch: Optional[str] = None
-    commit_sha: Optional[str] = None
-    triggered_by: Optional[str] = None
-    url: Optional[str] = None
-    provider_id: Optional[int] = None
-    duration_seconds: Optional[int] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
-    raw_payload: Optional[Any] = None
+    provider_id: int = Field(..., description="Provider ID")
 
 class Build(BuildBase):
     id: int
+    provider_id: int
+    provider: Optional[Provider] = None
     created_at: datetime
-    provider_name: Optional[str] = None
-    provider_kind: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
-# Build list response with pagination
-class BuildListResponse(BaseSchema):
+    class Config:
+        from_attributes = True
+
+class BuildListResponse(BaseModel):
     builds: List[Build]
     total: int
     limit: int
     offset: int
     has_more: bool
 
-# Webhook schemas
-class GitHubWebhookPayload(BaseSchema):
-    workflow_run: dict
-    workflow: dict
-    repository: dict
-    sender: dict
+class AlertBase(BaseModel):
+    type: AlertType = Field(..., description="Alert type")
+    name: str = Field(..., description="Alert name")
+    config_json: Dict[str, Any] = Field(..., description="Alert configuration")
+    is_active: bool = Field(True, description="Whether alert is active")
 
-# Alert test schemas
-class AlertTestRequest(BaseSchema):
-    message: str = Field(..., min_length=1, max_length=1000)
-    severity: str = Field(default="info", pattern="^(info|warning|error)$")
+class AlertCreate(AlertBase):
+    pass
 
-class AlertTestResponse(BaseSchema):
+class Alert(AlertBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class AlertHistoryBase(BaseModel):
+    alert_id: int = Field(..., description="Alert ID")
+    build_id: Optional[int] = Field(None, description="Build ID if alert is build-related")
+    message: str = Field(..., description="Alert message")
+    severity: AlertSeverity = Field(..., description="Alert severity")
+    status: str = Field(..., description="Alert status (sent, failed, pending)")
+
+class AlertHistoryCreate(AlertHistoryBase):
+    pass
+
+class AlertHistory(AlertHistoryBase):
+    id: int
+    error_message: Optional[str] = Field(None, description="Error message if alert failed")
+    sent_at: datetime
+    alert: Optional[Alert] = None
+    build: Optional[Build] = None
+
+    class Config:
+        from_attributes = True
+
+class SettingsBase(BaseModel):
+    key: str = Field(..., description="Setting key")
+    value: Optional[str] = Field(None, description="Setting value")
+    description: Optional[str] = Field(None, description="Setting description")
+
+class SettingsCreate(SettingsBase):
+    pass
+
+class Settings(SettingsBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class MetricsBase(BaseModel):
+    metric_name: str = Field(..., description="Metric name")
+    metric_value: float = Field(..., description="Metric value")
+    metric_unit: Optional[str] = Field(None, description="Metric unit")
+    window_start: datetime = Field(..., description="Metrics window start time")
+    window_end: datetime = Field(..., description="Metrics window end time")
+
+class MetricsCreate(MetricsBase):
+    pass
+
+class Metrics(MetricsBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Dashboard Models
+class MetricsSummary(BaseModel):
+    window_days: int = Field(..., description="Metrics window in days")
+    success_rate: float = Field(..., description="Success rate (0.0 to 1.0)")
+    failure_rate: float = Field(..., description="Failure rate (0.0 to 1.0)")
+    avg_build_time_seconds: float = Field(..., description="Average build time in seconds")
+    last_build_status: str = Field(..., description="Last build status")
+    last_updated: datetime = Field(..., description="Last metrics update time")
+
+# Webhook Models
+class GitHubWebhookPayload(BaseModel):
+    """GitHub Actions webhook payload"""
+    workflow_run: Dict[str, Any]
+    workflow: Dict[str, Any]
+    repository: Dict[str, Any]
+    sender: Dict[str, Any]
+
+class JenkinsWebhookPayload(BaseModel):
+    """Jenkins webhook payload"""
+    name: str
+    url: str
+    build: Dict[str, Any]
+    timestamp: Optional[int] = None
+
+# Alert Models
+class AlertTestRequest(BaseModel):
+    message: str = Field(..., description="Test message")
+    severity: AlertSeverity = Field(AlertSeverity.INFO, description="Alert severity")
+    alert_type: AlertType = Field(..., description="Alert type to test")
+
+class AlertTestResponse(BaseModel):
     success: bool
     message: str
-    channel: str = "email"
+    alert_id: Optional[int] = None
+    error: Optional[str] = None
 
-# Seed data schemas
-class SeedRequest(BaseSchema):
-    providers: Optional[List[dict]] = None
-    builds: Optional[List[dict]] = None
+# Seed Models
+class SeedRequest(BaseModel):
+    """Request to seed database with sample data"""
+    pass
 
-class SeedResponse(BaseSchema):
+class SeedResponse(BaseModel):
+    """Response from seeding database"""
     success: bool
     message: str
-    providers_created: int = 0
-    builds_created: int = 0
+    builds_created: int
+    providers_created: int
 
-# Error response schema
-class ErrorResponse(BaseSchema):
-    detail: str
+# Health Check
+class HealthResponse(BaseModel):
+    ok: bool
+    timestamp: datetime
+    version: str = "1.0.0"
+    database: str = "connected"

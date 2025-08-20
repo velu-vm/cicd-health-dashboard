@@ -1,13 +1,82 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Health Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>CI/CD Health Dashboard</h1>
+            <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading dashboard data...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="error-state" style="display: none;">
+            <h2>Failed to Load Dashboard</h2>
+            <p id="errorMessage">An error occurred while loading the dashboard.</p>
+            <button onclick="loadDashboard()" class="btn btn-primary">Try Again</button>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="dashboard-content" style="display: none;">
+            <!-- Summary Cards -->
+            <div class="summary-cards">
+                <div class="card summary-card">
+                    <h3>Success Rate</h3>
+                    <div class="metric-value" id="successRate">-</div>
+                    <div class="metric-label">Builds completed successfully</div>
+                </div>
+                <div class="card summary-card">
+                    <h3>Failure Rate</h3>
+                    <div class="metric-value" id="failureRate">-</div>
+                    <div class="metric-label">Builds that failed</div>
+                </div>
+                <div class="card summary-card">
+                    <h3>Avg Build Time</h3>
+                    <div class="metric-value" id="avgBuildTime">-</div>
+                    <div class="metric-label">Average completion time</div>
+                </div>
+                <div class="card summary-card">
+                    <h3>Last Build Status</h3>
+                    <div class="metric-value" id="lastBuildStatus">-</div>
+                    <div class="metric-label">Most recent build result</div>
+                </div>
+            </div>
+
+            <!-- Builds Table -->
+            <div class="card">
+                <h2>Recent Builds</h2>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Build ID</th>
+                                <th>Branch</th>
+                                <th>Duration</th>
+                                <th>Started</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="buildsTableBody">
+                            <!-- Builds will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
 </html>

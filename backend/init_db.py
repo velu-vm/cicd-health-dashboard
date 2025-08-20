@@ -1,86 +1,88 @@
 #!/usr/bin/env python3
 """
 Database initialization script for CI/CD Health Dashboard
-Creates tables and inserts default settings
 """
 
 import asyncio
 import os
-from sqlalchemy import select
-from app.db import init_db, AsyncSessionLocal
-from app.models import Settings, Provider
+import sys
+from pathlib import Path
 
-async def create_default_settings():
-    """Create default settings if they don't exist"""
-    async with AsyncSessionLocal() as session:
-        # Check if settings exist
-        result = await session.execute(select(Settings).where(Settings.id == 1))
-        settings = result.scalar_one_or_none()
-        
-        if not settings:
-            # Create default settings
-            default_settings = Settings(
-                id=1,
-                alert_email="alerts@example.com",
-                api_write_key="dev-write-key-change-in-production"
-            )
-            session.add(default_settings)
-            await session.commit()
-            print("✅ Default settings created")
-        else:
-            print("✅ Settings already exist")
+# Add the app directory to the Python path
+sys.path.append(str(Path(__file__).parent / "app"))
 
-async def create_default_providers():
-    """Create default GitHub Actions providers if they don't exist"""
-    async with AsyncSessionLocal() as session:
-        # Check if GitHub Actions provider exists
-        result = await session.execute(
-            select(Provider).where(Provider.name == "github-actions-default")
-        )
-        github_provider = result.scalar_one_or_none()
-        
-        if not github_provider:
-            github_provider = Provider(
-                name="github-actions-default",
-                kind="github_actions",
-                config_json={"description": "Default GitHub Actions provider"}
-            )
-            session.add(github_provider)
-            await session.commit()
-            print("✅ Default GitHub Actions provider created")
-        else:
-            print("✅ Default GitHub Actions provider already exists")
+from app.db import init_db, close_db
+from app.models import Base, Provider, Alert, Settings
+from app.db import async_engine
 
 async def main():
-    """Main initialization function"""
+    """Initialize the database with tables and basic data"""
     print("🚀 Initializing CI/CD Health Dashboard Database...")
     
     try:
-        # Initialize database tables
+        # Create all tables
+        print("📋 Creating database tables...")
         await init_db()
-        print("✅ Database tables created")
+        
+        # Create default alert configuration
+        print("🔔 Setting up default alert configuration...")
+        async with async_engine.begin() as conn:
+            # Check if default alert exists
+            from sqlalchemy import select
+            result = await conn.execute(select(Alert).where(Alert.name == "default-email"))
+            if not result.scalar_one_or_none():
+                # Create default email alert
+                default_alert = Alert(
+                    name="default-email",
+                    type="email",
+                    config_json={
+                        "enabled": True,
+                        "recipients": ["admin@example.com"]
+                    },
+                    is_active=True
+                )
+                await conn.execute(
+                    "INSERT INTO alerts (name, type, config_json, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (default_alert.name, default_alert.type, str(default_alert.config_json), default_alert.is_active, default_alert.created_at)
+                )
+                print("✅ Default email alert created")
+            else:
+                print("ℹ️  Default alert already exists")
         
         # Create default settings
-        await create_default_settings()
-        
-        # Create default providers
-        await create_default_providers()
+        print("⚙️  Setting up default settings...")
+        async with async_engine.begin() as conn:
+            # Check if default settings exist
+            result = await conn.execute(select(Settings).where(Settings.key == "dashboard_title"))
+            if not result.scalar_one_or_none():
+                # Create default settings
+                default_settings = [
+                    ("dashboard_title", "CI/CD Health Dashboard", "Dashboard title"),
+                    ("refresh_interval", "30", "Auto-refresh interval in seconds"),
+                    ("alerts_enabled", "true", "Enable/disable alert system"),
+                    ("max_builds_display", "50", "Maximum builds to display in table")
+                ]
+                
+                for key, value, description in default_settings:
+                    await conn.execute(
+                        "INSERT INTO settings (key, value, description, created_at) VALUES (?, ?, ?, ?)",
+                        (key, value, description, "2024-01-01T00:00:00")
+                    )
+                print("✅ Default settings created")
+            else:
+                print("ℹ️  Default settings already exist")
         
         print("🎉 Database initialization completed successfully!")
-        print("\nDefault API Write Key: dev-write-key-change-in-production")
-        print("Use this key in the X-API-KEY header for write operations")
-        print("\nEmail Configuration:")
-        print("- Alert Email: alerts@example.com")
-        print("\nSMTP Configuration (from environment variables):")
-        print("- SMTP_HOST: Set in environment")
-        print("- SMTP_PORT: Set in environment (default: 587)")
-        print("- SMTP_USERNAME: Set in environment")
-        print("- SMTP_PASSWORD: Set in environment")
-        print("- ALERTS_ENABLED: Set to 'true' or 'false' in environment")
+        print("\n📊 Next steps:")
+        print("1. Start the backend: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload")
+        print("2. Seed with sample data: curl -X POST http://localhost:8000/api/seed")
+        print("3. Open the frontend: frontend/index.html")
         
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
-        raise
+        sys.exit(1)
+    finally:
+        await close_db()
 
 if __name__ == "__main__":
     asyncio.run(main())

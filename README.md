@@ -1,474 +1,222 @@
-# CI/CD Health Dashboard
+# CI/CD Pipeline Health Dashboard
 
-A comprehensive monitoring and visualization platform for CI/CD pipeline health using GitHub Actions. Built with FastAPI, React, and modern DevOps practices.
+A comprehensive dashboard for monitoring CI/CD pipeline executions from tools like GitHub Actions and Jenkins, providing real-time metrics, alerts, and observability.
 
-## Features
+## 🚀 Features
 
-- **📊 Real-time Monitoring**: GitHub Actions webhook processing with instant updates
-- **📈 Metrics Dashboard**: Success rates, build times, and pipeline health visualization
-- **🔔 Email Alert System**: Automatic alerts for failed builds with debouncing
-- **🔄 Background Polling**: Worker service for continuous monitoring
-- **📱 Responsive UI**: Modern React frontend with Tailwind CSS
-- **🔒 API Security**: Write operations protected with API keys
-- **🐳 Docker Ready**: Complete containerization for development and production
-- **📊 SQLite First**: Local development with SQLite, production-ready for PostgreSQL
+- **Real-time Pipeline Monitoring**: Track success/failure rates, build times, and status
+- **Comprehensive Metrics**: Success rate, failure rate, average build time, last build status
+- **Alert System**: Slack and email notifications for pipeline failures
+- **Modern UI**: Responsive dashboard with real-time updates
+- **Multi-Provider Support**: GitHub Actions, Jenkins, and extensible for other tools
 
-## Quick Start
+## 🏗️ Architecture
+
+### Backend (Python/FastAPI)
+- **FastAPI**: Modern, fast web framework for building APIs
+- **SQLAlchemy**: SQL toolkit and ORM for database operations
+- **SQLite**: Lightweight database for development (configurable for production)
+- **Async Support**: Full async/await support for high performance
+
+### Frontend (Vanilla JavaScript)
+- **Pure JavaScript**: No framework dependencies, lightweight and fast
+- **Responsive Design**: Mobile-first approach with CSS Grid and Flexbox
+- **Real-time Updates**: WebSocket-like polling for live data
+- **Modern UI**: Clean, professional interface with status indicators
+
+### Database Schema
+- **Providers**: CI/CD tool configurations
+- **Builds**: Pipeline execution records
+- **Alerts**: Notification history and settings
+- **Metrics**: Aggregated performance data
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python 3.8+, FastAPI, SQLAlchemy, SQLite
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript
+- **Database**: SQLite (development), PostgreSQL (production ready)
+- **Alerting**: Slack webhooks, SMTP email
+- **Deployment**: Docker containerization
+
+## 📦 Installation & Setup
 
 ### Prerequisites
+- Python 3.8+
+- pip or uv package manager
+- Modern web browser
 
-- **Backend**: Python 3.9+, SQLite
-- **Frontend**: Node.js 18+, npm
-- **Docker**: Docker and Docker Compose (optional)
+### Quick Start
 
-### Option 1: Docker (Recommended)
-
-1. **Clone and navigate**
+1. **Clone the repository**
    ```bash
    git clone <repository-url>
    cd cicd-health-dashboard
    ```
 
-2. **Start development environment**
+2. **Set up Python environment**
    ```bash
-   cd ops
-   make dev-up
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
    ```
 
-3. **Seed the database**
+3. **Configure environment variables**
    ```bash
-   make seed
+   cp .env.example .env
+   # Edit .env with your configuration
    ```
 
-4. **Access the application**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
-
-### Option 2: Manual Setup
-
-1. **Backend Setup**
+4. **Initialize database**
    ```bash
    cd backend
-   pip install -e .
    python init_db.py
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-2. **Frontend Setup**
+5. **Start the backend**
    ```bash
-   cd frontend
-   npm install
-   npm run dev
+   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
-3. **Worker Setup** (Optional)
-   ```bash
-   cd worker
-   pip install -r requirements.txt
-   python run_scheduler.py
-   ```
+6. **Open the frontend**
+   - Navigate to `frontend/` directory
+   - Open `index.html` in your browser
+   - Or serve with a simple HTTP server: `python -m http.server 8080`
 
-## Verification
+## 🔧 Configuration
 
-After starting the services, verify that everything is working correctly using the verification script:
-
+### Environment Variables
 ```bash
-# Make sure the backend is running first
-./scripts/verify.sh
+# Database
+DATABASE_URL=sqlite:///./data.db
+
+# Frontend Origin (for CORS)
+FRONTEND_ORIGIN=http://localhost:8080
+
+# Alert Configuration
+SLACK_WEBHOOK_URL=your_slack_webhook_url
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+
+# Security
+WRITE_KEY=your_secret_write_key
 ```
 
-The verification script tests:
-- ✅ **Health Check**: `GET /health` endpoint responsiveness
-- ✅ **Database Seeding**: `POST /api/seed` with API key authentication
-- ✅ **Metrics Summary**: `GET /api/metrics/summary` data format
-- ✅ **Builds List**: `GET /api/builds?limit=5` pagination
+### Alert Setup
+1. **Slack**: Create a webhook in your Slack workspace
+2. **Email**: Configure SMTP settings for your email provider
 
-**Expected Output:**
-```
-🔍 CI/CD Health Dashboard API Verification
-==========================================
-API Base URL: http://localhost:8000
-API Key: dev-write-key-change-in-production
+## 📊 API Endpoints
 
-1️⃣  Testing Health Check Endpoint...
-   GET http://localhost:8000/health
-✅ PASS: Health check endpoint is responding correctly
-
-2️⃣  Testing Database Seeding...
-   POST http://localhost:8000/api/seed
-✅ PASS: Database seeding completed successfully
-
-3️⃣  Testing Metrics Summary Endpoint...
-   GET http://localhost:8000/api/metrics/summary
-✅ PASS: Metrics summary endpoint is responding correctly
-
-4️⃣  Testing Builds List Endpoint...
-   GET http://localhost:8000/api/builds?limit=5
-✅ PASS: Builds list endpoint is responding correctly
-
-🎉 All API verification tests PASSED!
-```
-
-**Troubleshooting:**
-- Ensure the backend is running on port 8000
-- Check that the API key is correct
-- Verify database initialization completed successfully
-- Install `jq` for formatted JSON output: `brew install jq` (macOS) or `apt-get install jq` (Ubuntu)
-
-## Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │    Backend      │    │     Worker      │
-│   (React)       │◄──►│   (FastAPI)     │◄──►│   (Polling)     │
-│   Port 5173     │    │   Port 8000     │    │   Background    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       ▼                       │
-         │              ┌─────────────────┐              │
-         │              │   Database      │              │
-         │              │   (SQLite)      │              │
-         │              └─────────────────┘              │
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   GitHub        │    │   Email         │    │   Metrics       │
-│   Actions       │    │   Alerts        │    │   Dashboard     │
-│   Webhooks      │    │   (SMTP)        │    │   (Real-time)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-## API Endpoints
-
-### Public Endpoints
+### Core Endpoints
 - `GET /health` - Health check
 - `GET /api/metrics/summary` - Dashboard metrics
-- `GET /api/builds` - List builds with pagination
-- `GET /api/builds/{id}` - Build details
-- `POST /api/webhook/github-actions` - GitHub Actions webhook
+- `GET /api/builds` - List of builds
+- `GET /api/builds/{build_id}` - Build details
+- `POST /api/webhook/github-actions` - GitHub webhook receiver
+- `POST /api/webhook/jenkins` - Jenkins webhook receiver
 
-### Protected Endpoints (Require X-API-KEY header)
-- `POST /api/alert/test` - Test email alert delivery
-- `POST /api/seed` - Seed database with sample data
+### Alert Endpoints
+- `POST /api/alert/test` - Test alert delivery
+- `GET /api/alerts` - Alert history
+- `POST /api/alerts/configure` - Configure alert settings
 
-### Default API Key
-For development: `dev-write-key-change-in-production`
+## 🎨 Frontend Components
 
-## GitHub Actions Workflows
+### Dashboard Layout
+- **Header**: Title and refresh button
+- **Summary Cards**: Key metrics display
+- **Builds Table**: Recent pipeline executions
+- **Status Indicators**: Color-coded build statuses
+- **Responsive Design**: Mobile and desktop optimized
 
-This repository includes comprehensive CI/CD workflows that automatically test, build, and validate your code on every push and pull request.
+### Real-time Features
+- **Auto-refresh**: Configurable polling intervals
+- **Live Updates**: Real-time status changes
+- **Error Handling**: Graceful failure states
+- **Loading States**: User feedback during operations
 
-### Available Workflows
+## 🚢 Deployment
 
-#### 1. CI/CD Pipeline (`.github/workflows/ci.yml`)
-**Triggers**: Push to `main`/`develop`, Pull Requests to `main`/`develop`
-
-**Jobs**:
-- **Backend Tests**: Python 3.11, pytest, coverage reporting
-- **Frontend Tests**: Node.js 18, npm tests, build validation
-- **Docker Validation**: Build all images, validate compose files, test startup
-- **Security Scan**: Trivy vulnerability scanning with SARIF output
-- **Lint & Format**: Black, isort, flake8, mypy for Python; ESLint for React
-- **Integration Test**: End-to-end API testing with live backend
-
-#### 2. Webhook Simulation (`.github/workflows/simulate-webhook.yml`)
-**Triggers**: Push to `main`/`develop` (excludes docs and README changes)
-
-**Purpose**: Automatically sends a GitHub Actions webhook payload to your backend on every code push, simulating real CI/CD pipeline events.
-
-### Required Repository Secrets
-
-To enable the webhook simulation workflow, you must configure these secrets in your GitHub repository:
-
-#### **Required Secrets**
-
-| Secret Name | Description | Example Value |
-|-------------|-------------|---------------|
-| `BACKEND_URL` | Full URL to your backend API | `https://your-dashboard.example.com` or `http://localhost:8000` |
-| `API_WRITE_KEY` | API key for backend write operations | `your-secure-api-key-here` |
-
-#### **How to Set Repository Secrets**
-
-1. **Navigate to your repository** on GitHub
-2. **Go to Settings** → **Secrets and variables** → **Actions**
-3. **Click "New repository secret"**
-4. **Add each secret** with the exact names above
-
-#### **Secret Configuration Examples**
-
-**For Local Development:**
-```
-BACKEND_URL: http://localhost:8000
-API_WRITE_KEY: dev-write-key-change-in-production
-```
-
-**For Production:**
-```
-BACKEND_URL: https://dashboard.yourcompany.com
-API_WRITE_KEY: prod-secure-key-12345
-```
-
-**For Staging:**
-```
-BACKEND_URL: https://staging-dashboard.yourcompany.com
-API_WRITE_KEY: staging-key-67890
-```
-
-### Workflow Features
-
-#### **Smart Triggering**
-- **CI Pipeline**: Runs on all code changes
-- **Webhook Simulation**: Only runs on code changes (excludes documentation updates)
-- **Conditional Execution**: Webhook workflow only runs when secrets are configured
-
-#### **Comprehensive Testing**
-- **Unit Tests**: Backend pytest, Frontend npm test
-- **Integration Tests**: Live API endpoint validation
-- **Docker Validation**: Image builds and compose file validation
-- **Security Scanning**: Vulnerability detection and reporting
-- **Code Quality**: Linting, formatting, and type checking
-
-#### **Artifact Management**
-- **Frontend Builds**: Uploaded as artifacts for deployment
-- **Test Coverage**: XML and terminal coverage reports
-- **Security Results**: SARIF format for GitHub Security tab
-
-### Workflow Status
-
-Monitor your workflows in the **Actions** tab of your GitHub repository:
-
-- **Green Checkmark** ✅: All tests passed
-- **Red X** ❌: Tests failed (click to see details)
-- **Yellow Circle** 🟡: Workflow in progress
-- **Gray Circle** ⚪: Workflow skipped (e.g., missing secrets)
-
-### Troubleshooting
-
-#### **Webhook Workflow Not Running**
-- **Check Secrets**: Ensure `BACKEND_URL` and `API_WRITE_KEY` are set
-- **Verify Triggers**: Workflow only runs on code pushes (not docs)
-- **Check Permissions**: Ensure GitHub Actions has access to secrets
-
-#### **Backend Connection Issues**
-- **URL Format**: Use full URLs including protocol (`https://` or `http://`)
-- **API Key**: Verify the key matches your backend configuration
-- **Network Access**: Ensure your backend is accessible from GitHub's runners
-
-#### **Test Failures**
-- **Backend Tests**: Check Python version compatibility (3.11+)
-- **Frontend Tests**: Verify Node.js version (18+)
-- **Docker Tests**: Ensure Docker is available in the runner
-
-### Customization
-
-#### **Modify Trigger Branches**
-Edit the `on.push.branches` section in each workflow file:
-```yaml
-on:
-  push:
-    branches: [ main, develop, feature/* ]  # Add your branches
-```
-
-#### **Add Environment-Specific Secrets**
-For different environments, use environment secrets:
-```yaml
-jobs:
-  deploy:
-    environment: production
-    secrets: inherit
-```
-
-#### **Customize Test Commands**
-Modify the test steps to match your project's testing strategy:
-```yaml
-- name: Run custom tests
-  run: |
-    python -m pytest tests/ --custom-flag
-    npm run test:custom
-```
-
-## Environment Configuration
-
-### Backend Environment Variables
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | Database connection string | `sqlite+aiosqlite:///./data.db` |
-| `API_HOST` | API server host | `0.0.0.0` |
-| `API_PORT` | API server port | `8000` |
-| `DEBUG` | Enable debug mode | `false` |
-| `ALERTS_ENABLED` | Enable/disable email alerts | `true` |
-| `SMTP_HOST` | SMTP server hostname | Required |
-| `SMTP_PORT` | SMTP server port | `587` |
-| `SMTP_USERNAME` | SMTP username/email | Required |
-| `SMTP_PASSWORD` | SMTP password or app password | Required |
-
-### Frontend Environment Variables
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VITE_API_BASE` | Backend API base URL | `http://localhost:8000` |
-
-### Worker Environment Variables
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENABLE_GH` | Enable GitHub Actions polling | `true` |
-| `GITHUB_TOKEN` | GitHub personal access token | Required |
-| `GITHUB_REPOS` | Comma-separated repository list | Required |
-| `WORKER_POLL_INTERVAL` | Polling interval in seconds | `60` |
-| `DASHBOARD_API_KEY` | API key for backend access | Required |
-
-## Development
-
-### Available Make Commands
-
+### Docker
 ```bash
-cd ops
+# Build the image
+docker build -t cicd-dashboard .
 
-# Development
-make dev-up          # Start development environment
-make dev-down        # Stop development environment
-make dev-logs        # View development logs
-make restart         # Restart development services
-
-# Production
-make prod-up         # Start production environment
-make prod-down       # Stop production environment
-make prod-logs       # View production logs
-make build           # Build all Docker images
-
-# Database & API
-make seed            # Seed database with sample data
-make alert-test      # Test email alert system
-
-# Utilities
-make clean           # Clean up containers and volumes
-make status          # Show service status
-make help            # Show all available commands
+# Run the container
+docker run -p 8000:8000 -p 8080:8080 cicd-dashboard
 ```
 
-### Code Organization
+### Production Considerations
+- Use PostgreSQL instead of SQLite
+- Configure proper CORS origins
+- Set up reverse proxy (nginx)
+- Enable HTTPS
+- Configure monitoring and logging
 
-```
-├── backend/                 # FastAPI backend
-│   ├── app/                # Application code
-│   │   ├── main.py         # FastAPI app and routes
-│   │   ├── models.py       # SQLAlchemy models
-│   │   ├── schemas.py      # Pydantic schemas
-│   │   ├── alerts.py       # Email alert system
-│   │   └── providers/      # CI/CD provider integrations
-│   ├── tests/              # Test suite
-│   └── pyproject.toml      # Python dependencies
-├── frontend/               # React frontend
-│   ├── src/                # Source code
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Page components
-│   │   └── services/       # API communication
-│   └── package.json        # Node.js dependencies
-├── worker/                 # Background polling service
-│   ├── poller.py           # CI/CD provider polling
-│   ├── scheduler.py        # Task scheduling
-│   └── requirements.txt    # Python dependencies
-├── ops/                    # Operations and deployment
-│   ├── docker/             # Docker configurations
-│   ├── compose.dev.yml     # Development environment
-│   ├── compose.prod.yml    # Production environment
-│   └── Makefile            # Operations commands
-└── scripts/                # Utility scripts
-    └── verify.sh           # API verification script
-```
+## 🔍 Monitoring & Observability
 
-## Testing
+### Built-in Metrics
+- Request/response times
+- Database query performance
+- Error rates and types
+- Alert delivery success rates
+
+### Health Checks
+- Database connectivity
+- External service availability
+- Alert service status
+- Overall system health
+
+## 🧪 Testing
 
 ### Backend Tests
 ```bash
 cd backend
-pytest
+pytest tests/
 ```
 
 ### Frontend Tests
-```bash
-cd frontend
-npm test
-```
+- Manual testing in multiple browsers
+- Responsive design validation
+- Performance testing with large datasets
 
-### API Verification
-```bash
-./scripts/verify.sh
-```
+## 📈 Future Enhancements
 
-## Deployment
+- **Real-time WebSockets**: Live updates without polling
+- **Advanced Analytics**: Trend analysis and predictions
+- **Multi-tenant Support**: Organization and team management
+- **Custom Dashboards**: User-configurable layouts
+- **Integration APIs**: Third-party tool connections
+- **Mobile App**: Native mobile applications
 
-### Development
-```bash
-cd ops
-make dev-up
-```
-
-### Production
-```bash
-cd ops
-make build
-make prod-up
-```
-
-### Environment Configuration
-1. Copy environment examples:
-   ```bash
-   cp ops/.env.example ops/.env
-   cp backend/.env.example backend/.env
-   cp frontend/.env.example frontend/.env
-   ```
-
-2. Configure production values:
-   - SMTP settings for email alerts
-   - GitHub token for repository access
-   - Secure API keys
-   - Database connection strings
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests
-5. Run the verification script
-6. Submit a pull request
+4. Add tests if applicable
+5. Submit a pull request
 
-## Troubleshooting
+## 📄 License
 
-### Common Issues
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-**Backend won't start:**
-- Check Python version (3.9+)
-- Verify dependencies are installed
-- Check port 8000 is available
+## 🙏 Acknowledgments
 
-**Frontend won't build:**
-- Ensure Node.js 18+ is installed
-- Clear node_modules and reinstall
-- Check Tailwind CSS configuration
+- Built with FastAPI and modern Python practices
+- Frontend designed for simplicity and performance
+- Inspired by modern DevOps and SRE practices
+- Designed for real-world CI/CD monitoring needs
 
-**Database errors:**
-- Run `python init_db.py` to initialize
-- Check file permissions for SQLite
-- Verify DATABASE_URL configuration
+## 📞 Support
 
-**API verification fails:**
-- Ensure backend is running on port 8000
-- Check API key configuration
-- Verify database is seeded
-
-### Getting Help
-
-- Check the logs: `make dev-logs` or `make prod-logs`
-- Verify API endpoints: `./scripts/verify.sh`
-- Review environment configuration
-- Check service status: `make status`
-
-## License
-
-MIT License - see LICENSE file for details.
+For questions or issues:
+- Create an issue in the repository
+- Check the documentation
+- Review the API specifications
 
 ---
 
-Built with ❤️ using FastAPI, React, and modern DevOps practices.
+**Built with ❤️ for modern engineering teams**

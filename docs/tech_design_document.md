@@ -612,3 +612,36 @@ SMTP_PASSWORD=app_password_here
 - **Database**: Connection pooling (20-100 connections)
 - **Redis**: 1-3 replicas with persistence
 - **Frontend**: CDN + load balancer for high traffic
+
+## 7. Security, Hardening & Compliance
+
+### Request Hardening
+- **Body size guard**: Requests larger than ~1 MB are rejected with HTTP 413. Configurable via `MAX_BODY_BYTES` (default 1,048,576 bytes).
+- **CORS**: Only the configured frontend origin is allowed. Set `FRONTEND_ORIGIN` (default `http://localhost:5173`). `allow_credentials`, `allow_methods`, and `allow_headers` are enabled for app needs.
+- **Naive rate limiting**: 60 requests/minute per client IP using an in-memory sliding window. Exceeding the limit returns HTTP 429. Suitable for single-instance deployments; for multi-instance production, replace with a shared store (e.g., Redis) or a gateway-level limiter.
+
+### Authentication & Authorization
+- **Write endpoints**: `POST /api/webhook/github-actions`, `POST /api/seed`, and `POST /api/alert/test` enforce `X-API-KEY` when `Settings.api_write_key` is configured. If the key is not set (demo mode), these endpoints allow requests without a key, aiding local demos.
+- **Header name**: `X-API-KEY`
+- **Storage**: The write key is stored in the `settings` table (`id=1`) under `api_write_key`.
+
+### Secrets Handling & Logging
+- **Log redaction**: Sensitive tokens/keys must never be logged in full. When logging, only the last 4 characters are retained (e.g., `***abcd`).
+- **Environment variables**: SMTP credentials are read from env (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`). Avoid printing these values; mask if required for diagnostics.
+
+### Transport & Deployment
+- **TLS**: Terminate TLS at the ingress/reverse-proxy (e.g., Nginx). Ensure `BACKEND_URL` uses `https://` in production.
+- **Containers**: Run as non-root, minimal base images, health checks in Dockerfiles.
+
+### Abuse & DoS Considerations
+- **Body-limit rejection** reduces memory pressure from oversized payloads.
+- **Rate limiter** mitigates burst traffic at the app-level. For stronger protection, deploy a WAF/reverse-proxy limiter.
+
+### Data Protection
+- **PII**: The system stores CI metadata only. No passwords or personal data beyond usernames/emails in commits.
+- **Backups**: Ensure volume-mounted SQLite file is backed up in production environments (or use PostgreSQL).
+
+### Operational Notes
+- **Scaling the limiter**: Replace the in-memory limiter with Redis or gateway-limits when horizontally scaling.
+- **Webhook security**: Optionally add HMAC verification for GitHub webhook payloads in future iterations.
+- **Configuration**: Key environment variables – `FRONTEND_ORIGIN`, `MAX_BODY_BYTES`, SMTP vars, and the database URL.

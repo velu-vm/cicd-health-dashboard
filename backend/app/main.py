@@ -1,24 +1,29 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional, List
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from collections import defaultdict
+import time
 
 from .db import init_db, get_db
-from .models import Provider, Build, Alert, Settings
+from .models import Provider, Build, Alert, Settings, Metrics
 from .schemas import (
     MetricsSummary, BuildListResponse, Build as BuildSchema,
-    GitHubWebhookPayload,
-    AlertTestRequest, AlertTestResponse, SeedRequest, SeedResponse
+    GitHubWebhookPayload, JenkinsWebhookPayload,
+    AlertTestRequest, AlertTestResponse, SeedRequest, SeedResponse,
+    HealthResponse
 )
-from .deps import get_pagination_params, verify_write_key
-from .alerts import send_alert, send_build_failure_alert
-from .providers.github_actions import GitHubActionsProvider
+from .alerts import alert_service
+
+# In-memory rate limiter store
+_rate_limits = defaultdict(list)  # ip -> [timestamps]
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 60
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CI/CD Health Dashboard API",
-    description="API for monitoring CI/CD pipeline health using GitHub Actions",
+    description="API for monitoring CI/CD pipeline health using GitHub Actions and Jenkins",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -44,13 +49,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize GitHub Actions provider
-github_provider = GitHubActionsProvider()
-
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
-    return {"ok": True}
+    return {
+        "ok": True,
+        "timestamp": datetime.now(),
+        "version": "1.0.0",
+        "database": "connected"
+    }
 
 @app.get("/api/metrics/summary", response_model=MetricsSummary)
 async def get_metrics_summary(session: AsyncSession = Depends(get_db)):
@@ -60,92 +67,55 @@ async def get_metrics_summary(session: AsyncSession = Depends(get_db)):
         now = datetime.now()
         seven_days_ago = now - timedelta(days=7)
         
-        # Get builds started in the last 7 days
-        result = await session.execute(
-            select(func.count(Build.id)).where(Build.started_at >= seven_days_ago)
-        )
-        builds_in_window = result.scalar() or 0
-        
-        # Get completed builds (success + failed) in the last 7 days
-        result = await session.execute(
-            select(func.count(Build.id)).where(
-                and_(
-                    Build.started_at >= seven_days_ago,
-                    Build.status.in_(["success", "failed"]),
-                    Build.finished_at.isnot(None)
-                )
+        # Get builds in the time window
+        builds_query = select(Build).where(
+            and_(
+                Build.started_at >= seven_days_ago,
+                Build.status.in_(["success", "failed", "running", "queued"])
             )
         )
-        completed_builds = result.scalar() or 0
+        result = await session.execute(builds_query)
+        builds = result.scalars().all()
         
-        # Get successful builds in the last 7 days
-        result = await session.execute(
-            select(func.count(Build.id)).where(
-                and_(
-                    Build.started_at >= seven_days_ago,
-                    Build.status == "success",
-                    Build.finished_at.isnot(None)
-                )
+        if not builds:
+            return MetricsSummary(
+                window_days=7,
+                success_rate=0.0,
+                failure_rate=0.0,
+                avg_build_time_seconds=0.0,
+                last_build_status="unknown",
+                last_updated=now
             )
-        )
-        successful_builds = result.scalar() or 0
         
-        # Get failed builds in the last 7 days
-        result = await session.execute(
-            select(func.count(Build.id)).where(
-                and_(
-                    Build.started_at >= seven_days_ago,
-                    Build.status == "failed",
-                    Build.finished_at.isnot(None)
-                )
-            )
-        )
-        failed_builds = result.scalar() or 0
+        # Calculate metrics
+        total_builds = len(builds)
+        successful_builds = len([b for b in builds if b.status == "success"])
+        failed_builds = len([b for b in builds if b.status == "failed"])
         
-        # Calculate success and failure rates
-        success_rate = 0.0
-        failure_rate = 0.0
-        if completed_builds > 0:
-            success_rate = successful_builds / completed_builds
-            failure_rate = failed_builds / completed_builds
+        success_rate = successful_builds / total_builds if total_builds > 0 else 0.0
+        failure_rate = failed_builds / total_builds if total_builds > 0 else 0.0
         
-        # Get average build time for completed builds in the last 7 days
-        result = await session.execute(
-            select(func.avg(Build.duration_seconds)).where(
-                and_(
-                    Build.started_at >= seven_days_ago,
-                    Build.status.in_(["success", "failed"]),
-                    Build.finished_at.isnot(None),
-                    Build.duration_seconds.isnot(None)
-                )
-            )
-        )
-        avg_build_time_seconds = result.scalar()
+        # Calculate average build time (only for completed builds)
+        completed_builds = [b for b in builds if b.duration_seconds is not None]
+        avg_build_time = sum(b.duration_seconds for b in completed_builds) / len(completed_builds) if completed_builds else 0.0
         
-        # Get last build status (most recently started build)
-        result = await session.execute(
-            select(Build.status).order_by(Build.started_at.desc()).limit(1)
-        )
-        last_build_status = result.scalar()
+        # Get last build status
+        last_build = max(builds, key=lambda b: b.started_at if b.started_at else datetime.min)
+        last_build_status = last_build.status
         
         return MetricsSummary(
             window_days=7,
             success_rate=success_rate,
             failure_rate=failure_rate,
-            avg_build_time_seconds=avg_build_time_seconds,
+            avg_build_time_seconds=avg_build_time,
             last_build_status=last_build_status,
-            last_updated=now.isoformat()
+            last_updated=now
         )
         
     except Exception as e:
-        # Return default values if database query fails
-        return MetricsSummary(
-            window_days=7,
-            success_rate=0.0,
-            failure_rate=0.0,
-            avg_build_time_seconds=None,
-            last_build_status=None,
-            last_updated=datetime.now().isoformat()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate metrics: {str(e)}"
         )
 
 @app.get("/api/builds", response_model=BuildListResponse)
@@ -176,7 +146,7 @@ async def get_builds(
         result = await session.execute(query)
         builds = result.scalars().all()
         
-        # Convert to response models
+        # Convert to response schemas
         build_schemas = []
         for build in builds:
             build_data = {
@@ -187,10 +157,9 @@ async def get_builds(
                 "commit_sha": build.commit_sha,
                 "triggered_by": build.triggered_by,
                 "url": build.url,
-                "provider_id": build.provider_id,
-                "duration_seconds": build.duration_seconds,
                 "started_at": build.started_at,
                 "finished_at": build.finished_at,
+                "duration_seconds": build.duration_seconds,
                 "raw_payload": build.raw_payload,
                 "created_at": build.created_at,
                 "provider_name": build.provider.name if build.provider else None,
@@ -214,17 +183,15 @@ async def get_builds(
 
 @app.get("/api/builds/{build_id}", response_model=BuildSchema)
 async def get_build(build_id: int, session: AsyncSession = Depends(get_db)):
-    """Get detailed build information"""
+    """Get details of a specific build"""
     try:
-        result = await session.execute(
-            select(Build).where(Build.id == build_id)
-        )
+        result = await session.execute(select(Build).where(Build.id == build_id))
         build = result.scalar_one_or_none()
         
         if not build:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Build not found"
+                detail=f"Build with ID {build_id} not found"
             )
         
         build_data = {
@@ -235,10 +202,9 @@ async def get_build(build_id: int, session: AsyncSession = Depends(get_db)):
             "commit_sha": build.commit_sha,
             "triggered_by": build.triggered_by,
             "url": build.url,
-            "provider_id": build.provider_id,
-            "duration_seconds": build.duration_seconds,
             "started_at": build.started_at,
             "finished_at": build.finished_at,
+            "duration_seconds": build.duration_seconds,
             "raw_payload": build.raw_payload,
             "created_at": build.created_at,
             "provider_name": build.provider.name if build.provider else None,
@@ -262,11 +228,13 @@ async def github_webhook(
 ):
     """Handle GitHub Actions webhook"""
     try:
-        # Parse the webhook payload
-        parsed_data = github_provider.parse_workflow_run(payload.model_dump())
+        # Extract build information from webhook
+        workflow_run = payload.workflow_run
+        workflow = payload.workflow
+        repository = payload.repository
+        sender = payload.sender
         
         # Get or create provider
-        repository = payload.repository
         provider_name = f"github-{repository.full_name}"
         result = await session.execute(
             select(Provider).where(Provider.name == provider_name)
@@ -284,101 +252,125 @@ async def github_webhook(
             await session.refresh(provider)
         
         # Create or update build
-        external_id = parsed_data["external_id"]
+        external_id = str(workflow_run.id)
         result = await session.execute(
             select(Build).where(
-                and_(Build.provider_id == provider.id, Build.external_id == external_id)
+                and_(
+                    Build.external_id == external_id,
+                    Build.provider_id == provider.id
+                )
             )
         )
         build = result.scalar_one_or_none()
         
-        if build:
-            # Update existing build
-            build.status = parsed_data["status"]
-            build.duration_seconds = parsed_data["duration_seconds"]
-            build.started_at = parsed_data["started_at"]
-            build.finished_at = parsed_data["finished_at"]
-            build.raw_payload = parsed_data["raw_payload"]
-            
-            # Check if this is a newly failed build that needs alerting
-            if (build.status == "failed" and 
-                build.finished_at and 
-                not build.finished_at == build.started_at):  # Ensure it's actually finished
-                
-                # Get settings for alerting
-                settings_result = await session.execute(
-                    select(Settings).where(Settings.id == 1)
-                )
-                settings = settings_result.scalar_one_or_none()
-                
-                if settings and settings.alert_email:
-                    # Prepare build data for alert
-                    build_data = {
-                        "id": build.id,
-                        "external_id": build.external_id,
-                        "status": build.status,
-                        "branch": build.branch,
-                        "duration_seconds": build.duration_seconds,
-                        "url": build.url,
-                        "provider_name": provider.name
-                    }
-                    
-                    # Send alert (non-blocking)
-                    await send_build_failure_alert(
-                        build_data,
-                        {"alert_email": settings.alert_email},
-                        session
-                    )
-        else:
-            # Create new build
+        if not build:
             build = Build(
-                provider_id=provider.id,
                 external_id=external_id,
-                status=parsed_data["status"],
-                duration_seconds=parsed_data["duration_seconds"],
-                branch=parsed_data["branch"],
-                commit_sha=parsed_data["commit_sha"],
-                triggered_by=parsed_data["triggered_by"],
-                started_at=parsed_data["started_at"],
-                finished_at=parsed_data["finished_at"],
-                url=parsed_data["url"],
-                raw_payload=parsed_data["raw_payload"]
+                provider_id=provider.id,
+                status=workflow_run.status,
+                branch=workflow_run.head_branch,
+                commit_sha=workflow_run.head_commit.id if workflow_run.head_commit else None,
+                triggered_by=sender.login if sender else None,
+                url=workflow_run.html_url,
+                started_at=workflow_run.run_started_at,
+                finished_at=workflow_run.updated_at,
+                raw_payload=payload.dict()
             )
             session.add(build)
-            await session.commit()
-            await session.refresh(build)
-            
-            # Check if this is a failed build that needs alerting
-            if (build.status == "failed" and 
-                build.finished_at and 
-                not build.finished_at == build.started_at):
-                
-                # Get settings for alerting
-                settings_result = await session.execute(
-                    select(Settings).where(Settings.id == 1)
-                )
-                settings = settings_result.scalar_one_or_none()
-                
-                if settings and settings.alert_email:
-                    # Prepare build data for alert
-                    build_data = {
-                        "id": build.id,
-                        "external_id": build.external_id,
-                        "status": build.status,
-                        "branch": build.branch,
-                        "duration_seconds": build.duration_seconds,
-                        "url": build.url,
-                        "provider_name": provider.name
-                    }
-                    
-                    # Send alert (non-blocking)
-                    await send_build_failure_alert(
-                        build_data,
-                        {"alert_email": settings.alert_email},
-                        session
-                    )
+        else:
+            # Update existing build
+            build.status = workflow_run.status
+            build.finished_at = workflow_run.updated_at
+            build.raw_payload = payload.dict()
         
-        return {"status": "processed"}
+        await session.commit()
+        
+        # Send alert if build failed
+        if workflow_run.conclusion == "failure":
+            await alert_service.send_build_failure_alert(
+                session=session,
+                build=build,
+                alert_type="email"
+            )
+        
+        return {"status": "success", "build_id": build.id}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process webhook: {str(e)}"
+        )
+
+@app.post("/api/webhook/jenkins")
+async def jenkins_webhook(
+    payload: JenkinsWebhookPayload,
+    session: AsyncSession = Depends(get_db)
+):
+    """Handle Jenkins webhook"""
+    try:
+        # Extract build information from webhook
+        name = payload.name
+        url = payload.url
+        build_info = payload.build
+        
+        # Get or create provider
+        provider_name = f"jenkins-{name}"
+        result = await session.execute(
+            select(Provider).where(Provider.name == provider_name)
+        )
+        provider = result.scalar_one_or_none()
+        
+        if not provider:
+            provider = Provider(
+                name=provider_name,
+                kind="jenkins",
+                config_json={"name": name, "url": url}
+            )
+            session.add(provider)
+            await session.commit()
+            await session.refresh(provider)
+        
+        # Create or update build
+        external_id = str(build_info.get("number", build_info.get("id", "unknown")))
+        result = await session.execute(
+            select(Build).where(
+                and_(
+                    Build.external_id == external_id,
+                    Build.provider_id == provider.id
+                )
+            )
+        )
+        build = result.scalar_one_or_none()
+        
+        if not build:
+            build = Build(
+                external_id=external_id,
+                provider_id=provider.id,
+                status=build_info.get("status", "unknown"),
+                branch=build_info.get("branch", "main"),
+                commit_sha=build_info.get("commit", None),
+                triggered_by=build_info.get("user", None),
+                url=build_info.get("url", url),
+                started_at=datetime.fromtimestamp(payload.timestamp / 1000) if payload.timestamp else None,
+                raw_payload=payload.dict()
+            )
+            session.add(build)
+        else:
+            # Update existing build
+            build.status = build_info.get("status", build.status)
+            build.raw_payload = payload.dict()
+        
+        await session.commit()
+        
+        # Send alert if build failed
+        if build_info.get("status") == "FAILURE":
+            await alert_service.send_build_failure_alert(
+                session=session,
+                build=build,
+                alert_type="email"
+            )
+        
+        return {"status": "success", "build_id": build.id}
         
     except Exception as e:
         raise HTTPException(
@@ -389,99 +381,102 @@ async def github_webhook(
 @app.post("/api/alert/test", response_model=AlertTestResponse)
 async def test_alert(
     request: AlertTestRequest,
-    session: AsyncSession = Depends(get_db),
-    _: bool = Depends(verify_write_key)
+    session: AsyncSession = Depends(get_db)
 ):
     """Test alert delivery"""
     try:
-        # Get settings
-        result = await session.execute(select(Settings).where(Settings.id == 1))
-        settings = result.scalar_one_or_none()
-        
-        if not settings:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Settings not configured"
-            )
-        
-        if not settings.alert_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Alert email not configured"
-            )
-        
-        # Get SMTP configuration from environment
-        smtp_host = os.getenv("SMTP_HOST")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_username = os.getenv("SMTP_USERNAME")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-        
-        if not all([smtp_host, smtp_username, smtp_password]):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="SMTP configuration incomplete"
-            )
-        
-        # Send test email
-        smtp_config = {
-            "host": smtp_host,
-            "port": smtp_port,
-            "username": smtp_username,
-            "password": smtp_password
-        }
-        
-        success = await send_alert(
-            request.message,
-            smtp_config,
-            settings.alert_email
+        result = await alert_service.test_alert(
+            session=session,
+            alert_type=request.alert_type,
+            message=request.message,
+            severity=request.severity
         )
         
-        return AlertTestResponse(
-            success=success,
-            message=f"Alert sent via email to {settings.alert_email}",
-            channel="email"
-        )
+        return AlertTestResponse(**result)
         
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send test alert: {str(e)}"
+            detail=f"Failed to test alert: {str(e)}"
         )
 
 @app.post("/api/seed", response_model=SeedResponse)
 async def seed_database(
     request: SeedRequest,
-    session: AsyncSession = Depends(get_db),
-    _: bool = Depends(verify_write_key)
+    session: AsyncSession = Depends(get_db)
 ):
     """Seed database with sample data"""
     try:
-        providers_created = 0
-        builds_created = 0
+        # Create sample providers
+        github_provider = Provider(
+            name="github-sample",
+            kind="github_actions",
+            config_json={"repository": "sample/repo"}
+        )
+        session.add(github_provider)
         
-        # Create providers if specified
-        if request.providers:
-            for provider_data in request.providers:
-                provider = Provider(**provider_data)
-                session.add(provider)
-                providers_created += 1
+        jenkins_provider = Provider(
+            name="jenkins-sample",
+            kind="jenkins",
+            config_json={"name": "Sample Pipeline", "url": "http://jenkins.example.com"}
+        )
+        session.add(jenkins_provider)
         
-        # Create builds if specified
-        if request.builds:
-            for build_data in request.builds:
-                build = Build(**build_data)
-                session.add(build)
-                builds_created += 1
+        await session.commit()
+        await session.refresh(github_provider)
+        await session.refresh(jenkins_provider)
+        
+        # Create sample builds
+        sample_builds = [
+            {
+                "external_id": "123456789",
+                "provider_id": github_provider.id,
+                "status": "success",
+                "branch": "main",
+                "commit_sha": "abc123def456",
+                "triggered_by": "john_doe",
+                "url": "https://github.com/sample/repo/actions/runs/123456789",
+                "started_at": datetime.now() - timedelta(hours=2),
+                "finished_at": datetime.now() - timedelta(hours=1, minutes=55),
+                "duration_seconds": 300
+            },
+            {
+                "external_id": "123456790",
+                "provider_id": github_provider.id,
+                "status": "failed",
+                "branch": "feature/new-feature",
+                "commit_sha": "def456ghi789",
+                "triggered_by": "jane_smith",
+                "url": "https://github.com/sample/repo/actions/runs/123456790",
+                "started_at": datetime.now() - timedelta(hours=4),
+                "finished_at": datetime.now() - timedelta(hours=3, minutes=50),
+                "duration_seconds": 600
+            },
+            {
+                "external_id": "123456791",
+                "provider_id": jenkins_provider.id,
+                "status": "success",
+                "branch": "develop",
+                "commit_sha": "ghi789jkl012",
+                "triggered_by": "build_bot",
+                "url": "http://jenkins.example.com/job/Sample%20Pipeline/123456791/",
+                "started_at": datetime.now() - timedelta(hours=6),
+                "finished_at": datetime.now() - timedelta(hours=5, minutes=45),
+                "duration_seconds": 900
+            }
+        ]
+        
+        for build_data in sample_builds:
+            build = Build(**build_data)
+            session.add(build)
         
         await session.commit()
         
         return SeedResponse(
             success=True,
-            message=f"Database seeded successfully",
-            providers_created=providers_created,
-            builds_created=builds_created
+            message="Database seeded successfully with sample data",
+            builds_created=len(sample_builds),
+            providers_created=2
         )
         
     except Exception as e:
@@ -490,19 +485,5 @@ async def seed_database(
             detail=f"Failed to seed database: {str(e)}"
         )
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "CI/CD Health Dashboard API",
-        "version": "1.0.0",
-        "docs": "/docs"
-    }
-
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host=os.getenv("API_HOST", "0.0.0.0"),
-        port=int(os.getenv("API_PORT", 8000)),
-        reload=os.getenv("DEBUG", "false").lower() == "true"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)

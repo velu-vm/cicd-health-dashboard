@@ -212,56 +212,6 @@ class GitHubActionsProvider:
             logger.error(f"Error fetching repository status: {e}")
             return {}
     
-    def parse_workflow_run(self, run_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse GitHub Actions workflow run data into standardized format"""
-        return {
-            "run_number": run_data.get("run_number"),
-            "run_id": str(run_data.get("id")),
-            "status": self._map_status(run_data.get("conclusion") or run_data.get("status")),
-            "conclusion": run_data.get("conclusion"),
-            "start_time": run_data.get("created_at"),
-            "end_time": run_data.get("updated_at"),
-            "duration": self._calculate_duration(
-                run_data.get("created_at"), 
-                run_data.get("updated_at")
-            ),
-            "commit_hash": run_data.get("head_sha"),
-            "commit_message": run_data.get("head_commit", {}).get("message"),
-            "author": run_data.get("head_commit", {}).get("author", {}).get("name"),
-            "run_url": run_data.get("html_url"),
-            "workflow_name": run_data.get("name"),
-            "trigger": run_data.get("event"),
-            "metadata": {
-                "workflow_id": run_data.get("workflow_id"),
-                "actor": run_data.get("actor", {}).get("login"),
-                "head_branch": run_data.get("head_branch"),
-                "base_branch": run_data.get("base_branch")
-            }
-        }
-    
-    def _map_status(self, status: str) -> str:
-        """Map GitHub Actions status to standardized status"""
-        status_mapping = {
-            "success": "success",
-            "failure": "failed",
-            "cancelled": "cancelled",
-            "skipped": "skipped",
-            "in_progress": "running",
-            "queued": "queued",
-            "waiting": "waiting",
-            "neutral": "neutral"
-        }
-        return status_mapping.get(status, "unknown")
-    
-    def _calculate_duration(self, start_time: str, end_time: str) -> Optional[int]:
-        """Calculate duration in seconds between start and end times"""
-        try:
-            start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-            return int((end - start).total_seconds())
-        except (ValueError, TypeError):
-            return None
-    
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """Verify GitHub webhook signature for security"""
         if not self.webhook_secret:
