@@ -1,4 +1,3 @@
-import httpx
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -6,26 +5,6 @@ from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
-
-async def send_slack(webhook_url: str, text: str) -> bool:
-    """Send Slack alert via webhook"""
-    try:
-        message = {
-            "text": text,
-            "username": "CI/CD Dashboard",
-            "icon_emoji": ":robot_face:"
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(webhook_url, json=message, timeout=10.0)
-            response.raise_for_status()
-            
-        logger.info(f"Slack alert sent successfully: {text[:50]}...")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Failed to send Slack alert: {e}")
-        return False
 
 def send_email(
     smtp_host: str,
@@ -61,30 +40,21 @@ def send_email(
         return False
 
 async def send_alert(
-    channel: str,
     message: str,
-    webhook_url: Optional[str] = None,
-    smtp_config: Optional[dict] = None,
-    to_email: Optional[str] = None
+    smtp_config: dict,
+    to_email: str
 ) -> bool:
-    """Send alert via specified channel"""
+    """Send alert via email"""
     try:
-        if channel == "slack" and webhook_url:
-            return await send_slack(webhook_url, message)
-        elif channel == "email" and smtp_config and to_email:
-            return send_email(
-                smtp_config["host"],
-                smtp_config["port"],
-                smtp_config["username"],
-                smtp_config["password"],
-                to_email,
-                f"CI/CD Alert: {message[:50]}...",
-                message
-            )
-        else:
-            logger.error(f"Invalid channel {channel} or missing configuration")
-            return False
-            
+        return send_email(
+            smtp_config["host"],
+            smtp_config["port"],
+            smtp_config["username"],
+            smtp_config["password"],
+            to_email,
+            f"CI/CD Alert: {message[:50]}...",
+            message
+        )
     except Exception as e:
-        logger.error(f"Failed to send alert via {channel}: {e}")
+        logger.error(f"Failed to send email alert: {e}")
         return False

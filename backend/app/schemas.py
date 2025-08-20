@@ -169,14 +169,13 @@ class JenkinsWebhookPayload(BaseModel):
 
 # Alert test schemas
 class AlertTestRequest(BaseModel):
-    channel: str = Field(..., regex="^(slack|email)$")
     message: str = Field(..., min_length=1, max_length=1000)
     severity: str = Field(default="info", regex="^(info|warning|error)$")
 
 class AlertTestResponse(BaseModel):
     success: bool
     message: str
-    channel: str
+    channel: str = "email"
 
 # Seed data schemas
 class SeedRequest(BaseModel):

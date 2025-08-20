@@ -6,7 +6,7 @@ FastAPI backend service for the CI/CD Health Dashboard with SQLite support and c
 
 - **Real-time Monitoring**: GitHub Actions and Jenkins webhook processing
 - **Metrics Dashboard**: Success rates, build times, and pipeline health
-- **Alert System**: Slack and email notifications with error handling
+- **Email Alert System**: SMTP-based notifications with error handling
 - **SQLite First**: Local development with SQLite, production-ready for PostgreSQL
 - **API Security**: Write operations protected with API keys
 - **Comprehensive Testing**: Full test coverage for all endpoints
@@ -69,7 +69,7 @@ FastAPI backend service for the CI/CD Health Dashboard with SQLite support and c
 - `POST /api/webhook/jenkins` - Jenkins webhook
 
 ### Protected Endpoints (Require X-API-KEY header)
-- `POST /api/alert/test` - Test alert delivery
+- `POST /api/alert/test` - Test email alert delivery
 - `POST /api/seed` - Seed database with sample data
 
 ### Default API Key
@@ -81,7 +81,7 @@ For development, the default API key is: `dev-write-key-change-in-production`
 - **providers**: CI/CD provider configuration
 - **builds**: Build/run information with status tracking
 - **alerts**: Alert history and delivery status
-- **settings**: Application configuration and API keys
+- **settings**: Application configuration, SMTP settings, and API keys
 
 ### Indexes
 - `idx_builds_status_started`: Performance for status queries
@@ -105,14 +105,19 @@ Accepts Jenkins webhook payloads and:
 
 ## Alert System
 
-### Supported Channels
-- **Slack**: Webhook-based notifications
-- **Email**: SMTP-based delivery
+### Email Alerts
+- **SMTP Support**: Configurable SMTP server settings
+- **Error Handling**: Non-blocking alerts that don't crash the pipeline
+- **Comprehensive Logging**: Detailed logging for troubleshooting
+- **Graceful Degradation**: System continues working even if alerts fail
 
-### Error Handling
-- Non-blocking: Alerts don't crash the pipeline
-- Comprehensive logging
-- Graceful degradation
+### Configuration
+Email alerts require the following settings in the database:
+- `smtp_host`: SMTP server hostname
+- `smtp_port`: SMTP server port (typically 587 for TLS)
+- `smtp_username`: SMTP username/email
+- `smtp_password`: SMTP password or app password
+- `alert_email`: Email address to receive alerts
 
 ## Development
 
@@ -156,11 +161,37 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
 DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/cicd_dashboard
 DEBUG=false
 API_WRITE_KEY=your-secure-production-key
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=alerts@company.com
 SMTP_PASSWORD=app_password
+ALERT_EMAIL=alerts@company.com
+```
+
+### SMTP Configuration Examples
+
+#### Gmail
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=your-app-password  # Use App Password, not regular password
+```
+
+#### Outlook/Office 365
+```bash
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=your-password
+```
+
+#### Custom SMTP Server
+```bash
+SMTP_HOST=mail.company.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=your-password
 ```
 
 ## Architecture
@@ -170,7 +201,7 @@ The backend follows a clean, async-first architecture:
 - **Models**: SQLAlchemy ORM with proper relationships
 - **Schemas**: Pydantic validation and serialization
 - **Dependencies**: FastAPI dependency injection
-- **Alerts**: Non-blocking notification system
+- **Alerts**: Non-blocking email notification system
 - **Webhooks**: Real-time CI/CD integration
 
 ## Contributing

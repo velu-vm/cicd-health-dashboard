@@ -41,7 +41,7 @@ class Alert(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     build_id = Column(Integer, ForeignKey("builds.id"), nullable=False)
-    channel = Column(String(50), nullable=False)  # slack, email
+    channel = Column(String(50), nullable=False)  # email
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
     success = Column(Boolean, default=True)  # Whether alert was sent successfully
     message = Column(Text, nullable=False)
@@ -54,7 +54,10 @@ class Settings(Base):
     
     id = Column(Integer, primary_key=True, default=1)
     alert_email = Column(String(255))  # Email for alerts
-    slack_webhook_url = Column(String(500))  # Slack webhook URL
+    smtp_host = Column(String(255))  # SMTP server host
+    smtp_port = Column(Integer)  # SMTP server port
+    smtp_username = Column(String(255))  # SMTP username
+    smtp_password = Column(String(255))  # SMTP password
     api_write_key = Column(String(255))  # API key for write operations
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

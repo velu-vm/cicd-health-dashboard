@@ -359,28 +359,30 @@ async def test_alert(
                 detail="Settings not configured"
             )
         
-        success = False
-        if request.channel == "slack" and settings.slack_webhook_url:
-            success = await send_alert(
-                "slack", request.message, webhook_url=settings.slack_webhook_url
-            )
-        elif request.channel == "email" and settings.alert_email:
-            # Note: SMTP config would need to be added to Settings
-            success = False
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="Email alerts not yet configured"
-            )
-        else:
+        if not settings.alert_email or not all([settings.smtp_host, settings.smtp_port, settings.smtp_username, settings.smtp_password]):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Channel {request.channel} not configured"
+                detail="Email configuration not complete"
             )
+        
+        # Send test email
+        smtp_config = {
+            "host": settings.smtp_host,
+            "port": settings.smtp_port,
+            "username": settings.smtp_username,
+            "password": settings.smtp_password
+        }
+        
+        success = await send_alert(
+            request.message,
+            smtp_config,
+            settings.alert_email
+        )
         
         return AlertTestResponse(
             success=success,
-            message=f"Alert sent via {request.channel}",
-            channel=request.channel
+            message=f"Alert sent via email to {settings.alert_email}",
+            channel="email"
         )
         
     except HTTPException:

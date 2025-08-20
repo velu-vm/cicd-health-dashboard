@@ -107,7 +107,6 @@ def test_webhook_jenkins():
 def test_alert_test_without_key():
     """Test alert test endpoint without API key"""
     payload = {
-        "channel": "slack",
         "message": "Test message",
         "severity": "info"
     }
