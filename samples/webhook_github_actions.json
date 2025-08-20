@@ -1,0 +1,107 @@
+{
+  "workflow_run": {
+    "id": 123456789,
+    "name": "CI/CD Pipeline",
+    "node_id": "MDg6V29ya2Zsb3dSdW4xMjM0NTY3ODk=",
+    "head_branch": "main",
+    "head_sha": "abc123def456",
+    "run_number": 42,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "workflow_id": 987654321,
+    "url": "https://api.github.com/repos/owner/repo/actions/runs/123456789",
+    "html_url": "https://github.com/owner/repo/actions/runs/123456789",
+    "pull_requests": [],
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-15T10:35:00Z",
+    "actor": {
+      "login": "username",
+      "id": 12345,
+      "avatar_url": "https://avatars.githubusercontent.com/u/12345?v=4",
+      "type": "User"
+    },
+    "run_attempt": 1,
+    "run_started_at": "2024-01-15T10:30:00Z",
+    "triggering_actor": {
+      "login": "username",
+      "id": 12345,
+      "avatar_url": "https://avatars.githubusercontent.com/u/12345?v=4",
+      "type": "User"
+    },
+    "jobs_url": "https://api.github.com/repos/owner/repo/actions/runs/123456789/jobs",
+    "logs_url": "https://api.github.com/repos/owner/repo/actions/runs/123456789/logs",
+    "check_suite_url": "https://api.github.com/repos/owner/repo/check-suites/123456789",
+    "artifacts_url": "https://api.github.com/repos/owner/repo/actions/runs/123456789/artifacts",
+    "cancel_url": "https://api.github.com/repos/owner/repo/actions/runs/123456789/cancel",
+    "rerun_url": "https://api.github.com/repos/owner/repo/actions/runs/123456789/rerun",
+    "workflow_url": "https://api.github.com/repos/owner/repo/actions/workflows/987654321",
+    "head_commit": {
+      "id": "abc123def456",
+      "tree_id": "def456ghi789",
+      "message": "feat: add new feature",
+      "timestamp": "2024-01-15T10:25:00Z",
+      "author": {
+        "name": "Author Name",
+        "email": "author@example.com"
+      },
+      "committer": {
+        "name": "Committer Name",
+        "email": "committer@example.com"
+      }
+    },
+    "repository": {
+      "id": 123456789,
+      "node_id": "MDEwOlJlcG9zaXRvcnkxMjM0NTY3ODk=",
+      "name": "repo",
+      "full_name": "owner/repo",
+      "private": false,
+      "owner": {
+        "login": "owner",
+        "id": 12345,
+        "type": "Organization"
+      }
+    },
+    "head_repository": {
+      "id": 123456789,
+      "node_id": "MDEwOlJlcG9zaXRvcnkxMjM0NTY3ODk=",
+      "name": "repo",
+      "full_name": "owner/repo",
+      "private": false,
+      "owner": {
+        "login": "owner",
+        "id": 12345,
+        "type": "Organization"
+      }
+    }
+  },
+  "workflow": {
+    "id": 987654321,
+    "node_id": "MDg6V29ya2Zsb3cxMjM0NTY3ODk=",
+    "name": "CI/CD Pipeline",
+    "path": ".github/workflows/ci.yml",
+    "state": "active",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-15T10:30:00Z",
+    "url": "https://api.github.com/repos/owner/repo/actions/workflows/987654321",
+    "html_url": "https://github.com/owner/repo/actions/workflows/ci.yml",
+    "badge_url": "https://github.com/owner/repo/workflows/CI%20Pipeline/badge.svg"
+  },
+  "repository": {
+    "id": 123456789,
+    "node_id": "MDEwOlJlcG9zaXRvcnkxMjM0NTY3ODk=",
+    "name": "repo",
+    "full_name": "owner/repo",
+    "private": false,
+    "owner": {
+      "login": "owner",
+      "id": 12345,
+      "type": "Organization"
+    }
+  },
+  "sender": {
+    "login": "username",
+    "id": 12345,
+    "type": "User"
+  }
+}

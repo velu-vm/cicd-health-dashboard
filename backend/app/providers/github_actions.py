@@ -11,11 +11,12 @@ class GitHubActionsProvider:
     
     def __init__(self):
         self.token = os.getenv("GITHUB_TOKEN")
+        self.webhook_secret = os.getenv("GITHUB_WEBHOOK_SECRET")
         self.base_url = "https://api.github.com"
         self.headers = {
             "Authorization": f"token {self.token}",
             "Accept": "application/vnd.github.v3+json"
-        }
+        } if self.token else {}
     
     async def fetch_workflow_runs(
         self, 
@@ -97,11 +98,45 @@ class GitHubActionsProvider:
             logger.error(f"Error fetching workflows: {e}")
             return []
     
+    async def fetch_repository_status(
+        self, 
+        owner: str, 
+        repo: str
+    ) -> Dict[str, Any]:
+        """Fetch overall repository status and recent activity"""
+        if not self.token:
+            return {}
+        
+        try:
+            # Fetch recent workflow runs
+            runs = await self.fetch_workflow_runs(owner, repo, per_page=5)
+            
+            # Fetch repository info
+            repo_url = f"{self.base_url}/repos/{owner}/{repo}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(repo_url, headers=self.headers) as response:
+                    if response.status == 200:
+                        repo_data = await response.json()
+                        
+                        return {
+                            "repository": repo_data,
+                            "recent_runs": runs,
+                            "last_updated": datetime.now().isoformat()
+                        }
+                    else:
+                        logger.error(f"Failed to fetch repository info: {response.status}")
+                        return {"recent_runs": runs}
+        except Exception as e:
+            logger.error(f"Error fetching repository status: {e}")
+            return {}
+    
     def parse_workflow_run(self, run_data: Dict[str, Any]) -> Dict[str, Any]:
         """Parse GitHub Actions workflow run data into standardized format"""
         return {
-            "build_number": run_data.get("run_number"),
+            "run_number": run_data.get("run_number"),
+            "run_id": str(run_data.get("id")),
             "status": self._map_status(run_data.get("conclusion") or run_data.get("status")),
+            "conclusion": run_data.get("conclusion"),
             "start_time": run_data.get("created_at"),
             "end_time": run_data.get("updated_at"),
             "duration": self._calculate_duration(
@@ -111,12 +146,14 @@ class GitHubActionsProvider:
             "commit_hash": run_data.get("head_sha"),
             "commit_message": run_data.get("head_commit", {}).get("message"),
             "author": run_data.get("head_commit", {}).get("author", {}).get("name"),
-            "build_url": run_data.get("html_url"),
+            "run_url": run_data.get("html_url"),
+            "workflow_name": run_data.get("name"),
+            "trigger": run_data.get("event"),
             "metadata": {
                 "workflow_id": run_data.get("workflow_id"),
-                "workflow_name": run_data.get("name"),
-                "trigger": run_data.get("event"),
-                "actor": run_data.get("actor", {}).get("login")
+                "actor": run_data.get("actor", {}).get("login"),
+                "head_branch": run_data.get("head_branch"),
+                "base_branch": run_data.get("base_branch")
             }
         }
     
@@ -129,7 +166,8 @@ class GitHubActionsProvider:
             "skipped": "skipped",
             "in_progress": "running",
             "queued": "queued",
-            "waiting": "waiting"
+            "waiting": "waiting",
+            "neutral": "neutral"
         }
         return status_mapping.get(status, "unknown")
     
@@ -141,3 +179,24 @@ class GitHubActionsProvider:
             return int((end - start).total_seconds())
         except (ValueError, TypeError):
             return None
+    
+    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
+        """Verify GitHub webhook signature for security"""
+        if not self.webhook_secret:
+            logger.warning("GitHub webhook secret not configured")
+            return False
+        
+        try:
+            import hmac
+            import hashlib
+            
+            expected_signature = "sha256=" + hmac.new(
+                self.webhook_secret.encode(),
+                payload,
+                hashlib.sha256
+            ).hexdigest()
+            
+            return hmac.compare_digest(signature, expected_signature)
+        except Exception as e:
+            logger.error(f"Error verifying webhook signature: {e}")
+            return False

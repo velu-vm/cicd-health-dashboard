@@ -5,9 +5,10 @@ from datetime import datetime
 # Pipeline schemas
 class PipelineBase(BaseModel):
     name: str
-    provider: str
     repository: str
+    owner: str
     branch: str = "main"
+    workflow_file: Optional[str] = None
 
 class PipelineCreate(PipelineBase):
     pass
@@ -15,42 +16,49 @@ class PipelineCreate(PipelineBase):
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
     branch: Optional[str] = None
+    workflow_file: Optional[str] = None
 
 class Pipeline(PipelineBase):
     id: int
+    provider: str = "github_actions"
     status: str
-    last_build_number: Optional[int] = None
-    last_build_url: Optional[str] = None
-    last_build_time: Optional[datetime] = None
+    last_run_number: Optional[int] = None
+    last_run_url: Optional[str] = None
+    last_run_time: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
-# Build schemas
-class BuildBase(BaseModel):
-    build_number: int
+# Workflow Run schemas
+class WorkflowRunBase(BaseModel):
+    run_number: int
+    run_id: str
     status: str
+    conclusion: Optional[str] = None
     commit_hash: Optional[str] = None
     commit_message: Optional[str] = None
     author: Optional[str] = None
-    build_url: Optional[str] = None
+    run_url: Optional[str] = None
+    workflow_name: Optional[str] = None
+    trigger: Optional[str] = None
 
-class BuildCreate(BuildBase):
+class WorkflowRunCreate(WorkflowRunBase):
     pipeline_id: int
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     duration: Optional[int] = None
     metadata: Optional[Dict[str, Any]] = None
 
-class BuildUpdate(BaseModel):
+class WorkflowRunUpdate(BaseModel):
     status: Optional[str] = None
+    conclusion: Optional[str] = None
     end_time: Optional[datetime] = None
     duration: Optional[int] = None
     metadata: Optional[Dict[str, Any]] = None
 
-class Build(BuildBase):
+class WorkflowRun(WorkflowRunBase):
     id: int
     pipeline_id: int
     start_time: Optional[datetime] = None
@@ -92,7 +100,8 @@ class HealthCheck(BaseModel):
     version: str
 
 # Webhook schemas
-class WebhookPayload(BaseModel):
-    provider: str
-    event_type: str
-    payload: Dict[str, Any]
+class GitHubWebhookPayload(BaseModel):
+    workflow_run: Dict[str, Any]
+    workflow: Dict[str, Any]
+    repository: Dict[str, Any]
+    sender: Dict[str, Any]

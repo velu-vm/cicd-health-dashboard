@@ -13,8 +13,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class CICDPoller:
-    """Background worker for polling CI/CD providers"""
+class GitHubActionsPoller:
+    """Background worker for polling GitHub Actions workflows"""
     
     def __init__(self):
         self.api_base_url = os.getenv("VITE_API_BASE_URL", "http://localhost:8000")
@@ -25,7 +25,7 @@ class CICDPoller:
         
     async def start(self):
         """Start the polling worker"""
-        logger.info("Starting CI/CD Poller")
+        logger.info("Starting GitHub Actions Poller")
         self.running = True
         
         # Create HTTP session
@@ -33,7 +33,7 @@ class CICDPoller:
         
         try:
             while self.running:
-                await self.poll_all_providers()
+                await self.poll_all_pipelines()
                 await asyncio.sleep(self.poll_interval)
         except KeyboardInterrupt:
             logger.info("Received shutdown signal")
@@ -44,18 +44,18 @@ class CICDPoller:
     
     async def stop(self):
         """Stop the polling worker"""
-        logger.info("Stopping CI/CD Poller")
+        logger.info("Stopping GitHub Actions Poller")
         self.running = False
     
     async def cleanup(self):
         """Clean up resources"""
         if self.session:
             await self.session.close()
-        logger.info("CI/CD Poller stopped")
+        logger.info("GitHub Actions Poller stopped")
     
-    async def poll_all_providers(self):
-        """Poll all configured CI/CD providers"""
-        logger.info("Starting provider polling cycle")
+    async def poll_all_pipelines(self):
+        """Poll all configured GitHub Actions pipelines"""
+        logger.info("Starting pipeline polling cycle")
         
         # Get list of pipelines to poll
         pipelines = await self.get_pipelines()
@@ -89,22 +89,17 @@ class CICDPoller:
             return await self.poll_pipeline(pipeline)
     
     async def poll_pipeline(self, pipeline: Dict[str, Any]):
-        """Poll a single pipeline"""
+        """Poll a single GitHub Actions pipeline"""
         try:
             pipeline_id = pipeline["id"]
-            provider = pipeline["provider"]
+            owner = pipeline["owner"]
             repository = pipeline["repository"]
+            branch = pipeline.get("branch", "main")
             
-            logger.info(f"Polling pipeline {pipeline_id} ({provider}: {repository})")
+            logger.info(f"Polling pipeline {pipeline_id} ({owner}/{repository}:{branch})")
             
-            # Fetch latest data from provider
-            if provider == "github_actions":
-                data = await self.poll_github_actions(pipeline)
-            elif provider == "jenkins":
-                data = await self.poll_jenkins(pipeline)
-            else:
-                logger.warning(f"Unknown provider: {provider}")
-                return
+            # Fetch latest data from GitHub Actions
+            data = await self.poll_github_actions(owner, repository, branch)
             
             if data:
                 # Update pipeline status
@@ -117,27 +112,20 @@ class CICDPoller:
             logger.error(f"Error polling pipeline {pipeline.get('id', 'unknown')}: {e}")
             raise
     
-    async def poll_github_actions(self, pipeline: Dict[str, Any]) -> Dict[str, Any]:
+    async def poll_github_actions(self, owner: str, repo: str, branch: str) -> Dict[str, Any]:
         """Poll GitHub Actions for pipeline data"""
-        # This would integrate with the GitHub Actions provider
-        # For now, return mock data
-        return {
-            "status": "success",
-            "last_build_number": 123,
-            "last_build_time": datetime.now().isoformat(),
-            "last_build_url": f"https://github.com/{pipeline['repository']}/actions/runs/123"
-        }
-    
-    async def poll_jenkins(self, pipeline: Dict[str, Any]) -> Dict[str, Any]:
-        """Poll Jenkins for pipeline data"""
-        # This would integrate with the Jenkins provider
-        # For now, return mock data
-        return {
-            "status": "success",
-            "last_build_number": 456,
-            "last_build_time": datetime.now().isoformat(),
-            "last_build_url": f"{os.getenv('JENKINS_URL', 'http://jenkins')}/job/{pipeline['name']}/456"
-        }
+        try:
+            # This would integrate with the GitHub Actions provider
+            # For now, return mock data
+            return {
+                "status": "success",
+                "last_run_number": 123,
+                "last_run_time": datetime.now().isoformat(),
+                "last_run_url": f"https://github.com/{owner}/{repo}/actions/runs/123"
+            }
+        except Exception as e:
+            logger.error(f"Error polling GitHub Actions for {owner}/{repo}: {e}")
+            return None
     
     async def get_pipelines(self) -> List[Dict[str, Any]]:
         """Get list of pipelines from the API"""
@@ -160,9 +148,9 @@ class CICDPoller:
             url = f"{self.api_base_url}/api/v1/pipelines/{pipeline_id}"
             payload = {
                 "status": data["status"],
-                "last_build_number": data["last_build_number"],
-                "last_build_time": data["last_build_time"],
-                "last_build_url": data["last_build_url"]
+                "last_run_number": data["last_run_number"],
+                "last_run_time": data["last_run_time"],
+                "last_run_url": data["last_run_url"]
             }
             
             async with self.session.put(url, json=payload) as response:
@@ -173,7 +161,7 @@ class CICDPoller:
 
 async def main():
     """Main entry point"""
-    poller = CICDPoller()
+    poller = GitHubActionsPoller()
     
     try:
         await poller.start()

@@ -1,11 +1,10 @@
 # CI/CD Health Dashboard
 
-A comprehensive dashboard for monitoring and visualizing the health of CI/CD pipelines across multiple providers including GitHub Actions and Jenkins.
+A comprehensive dashboard for monitoring and visualizing the health of CI/CD pipelines using GitHub Actions.
 
 ## Features
 
-- Real-time monitoring of CI/CD pipeline health
-- Support for GitHub Actions and Jenkins
+- Real-time monitoring of GitHub Actions workflow health
 - Webhook integration for instant updates
 - Historical data tracking and analytics
 - Modern React frontend with Tailwind CSS
@@ -36,7 +35,7 @@ docker-compose -f ops/compose.prod.yml up -d
 
 - **Backend**: FastAPI application with SQLAlchemy ORM
 - **Frontend**: React + Vite + Tailwind CSS
-- **Worker**: Background service for polling CI/CD providers
+- **Worker**: Background service for polling GitHub Actions
 - **Database**: PostgreSQL with async support
 - **Message Queue**: Redis for job processing
 
