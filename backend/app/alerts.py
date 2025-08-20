@@ -1,103 +1,90 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import List
-from datetime import datetime
+import httpx
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import Optional
+import logging
 
-from .db import get_db
-from .models import Alert
-from .schemas import AlertCreate, AlertUpdate, Alert as AlertSchema
-from .deps import get_current_active_user
+logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["alerts"])
+async def send_slack(webhook_url: str, text: str) -> bool:
+    """Send Slack alert via webhook"""
+    try:
+        message = {
+            "text": text,
+            "username": "CI/CD Dashboard",
+            "icon_emoji": ":robot_face:"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(webhook_url, json=message, timeout=10.0)
+            response.raise_for_status()
+            
+        logger.info(f"Slack alert sent successfully: {text[:50]}...")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send Slack alert: {e}")
+        return False
 
-@router.get("/alerts", response_model=List[AlertSchema])
-async def get_alerts(
-    skip: int = 0,
-    limit: int = 100,
-    session: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_active_user)
-):
-    """Get all alerts with pagination"""
-    query = select(Alert).offset(skip).limit(limit)
-    result = await session.execute(query)
-    alerts = result.scalars().all()
-    return alerts
+def send_email(
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str,
+    smtp_pass: str,
+    to_email: str,
+    subject: str,
+    body: str
+) -> bool:
+    """Send email alert via SMTP"""
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        # Add body
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Send email
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        
+        logger.info(f"Email alert sent successfully to {to_email}: {subject}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send email alert: {e}")
+        return False
 
-@router.get("/alerts/{alert_id}", response_model=AlertSchema)
-async def get_alert(
-    alert_id: int,
-    session: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_active_user)
-):
-    """Get a specific alert by ID"""
-    query = select(Alert).where(Alert.id == alert_id)
-    result = await session.execute(query)
-    alert = result.scalar_one_or_none()
-    
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-    return alert
-
-@router.post("/alerts", response_model=AlertSchema, status_code=status.HTTP_201_CREATED)
-async def create_alert(
-    alert: AlertCreate,
-    session: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_active_user)
-):
-    """Create a new alert"""
-    db_alert = Alert(**alert.dict())
-    session.add(db_alert)
-    await session.commit()
-    await session.refresh(db_alert)
-    return db_alert
-
-@router.put("/alerts/{alert_id}", response_model=AlertSchema)
-async def update_alert(
-    alert_id: int,
-    alert_update: AlertUpdate,
-    session: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_active_user)
-):
-    """Update an existing alert"""
-    query = select(Alert).where(Alert.id == alert_id)
-    result = await session.execute(query)
-    db_alert = result.scalar_one_or_none()
-    
-    if not db_alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-    
-    update_data = alert_update.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_alert, field, value)
-    
-    await session.commit()
-    await session.refresh(db_alert)
-    return db_alert
-
-@router.delete("/alerts/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_alert(
-    alert_id: int,
-    session: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_active_user)
-):
-    """Delete an alert"""
-    query = select(Alert).where(Alert.id == alert_id)
-    result = await session.execute(query)
-    alert = result.scalar_one_or_none()
-    
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-    
-    await session.delete(alert)
-    await session.commit()
-    return None
+async def send_alert(
+    channel: str,
+    message: str,
+    webhook_url: Optional[str] = None,
+    smtp_config: Optional[dict] = None,
+    to_email: Optional[str] = None
+) -> bool:
+    """Send alert via specified channel"""
+    try:
+        if channel == "slack" and webhook_url:
+            return await send_slack(webhook_url, message)
+        elif channel == "email" and smtp_config and to_email:
+            return send_email(
+                smtp_config["host"],
+                smtp_config["port"],
+                smtp_config["username"],
+                smtp_config["password"],
+                to_email,
+                f"CI/CD Alert: {message[:50]}...",
+                message
+            )
+        else:
+            logger.error(f"Invalid channel {channel} or missing configuration")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Failed to send alert via {channel}: {e}")
+        return False

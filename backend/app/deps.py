@@ -1,7 +1,9 @@
-from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from .db import get_db
+from .models import Settings
 
 async def get_current_user(session: AsyncSession = Depends(get_db)):
     """Dependency to get current authenticated user"""
@@ -21,11 +23,40 @@ async def get_current_active_user(current_user = Depends(get_current_user)):
 
 def get_pagination_params(
     skip: int = 0,
-    limit: int = 100
+    limit: int = 50
 ):
     """Dependency to get pagination parameters"""
     if skip < 0:
         skip = 0
-    if limit < 1 or limit > 1000:
-        limit = 100
+    if limit < 1 or limit > 100:
+        limit = 50
     return {"skip": skip, "limit": limit}
+
+async def verify_write_key(
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+    session: AsyncSession = Depends(get_db)
+) -> bool:
+    """Verify API write key from header against Settings"""
+    if not x_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="X-API-KEY header required for write operations"
+        )
+    
+    # Get settings from database
+    result = await session.execute(select(Settings).where(Settings.id == 1))
+    settings = result.scalar_one_or_none()
+    
+    if not settings or not settings.api_write_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API write key not configured in settings"
+        )
+    
+    if x_api_key != settings.api_write_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API write key"
+        )
+    
+    return True

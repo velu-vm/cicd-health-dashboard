@@ -1,63 +1,66 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, JSON, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .db import Base
 
-class Pipeline(Base):
-    __tablename__ = "pipelines"
+class Provider(Base):
+    __tablename__ = "providers"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    provider = Column(String(50), default="github_actions")  # Always github_actions
-    repository = Column(String(255), nullable=False)
-    owner = Column(String(255), nullable=False)  # GitHub owner/organization
-    branch = Column(String(100), default="main")
-    workflow_file = Column(String(255))  # .github/workflows/filename.yml
-    status = Column(String(50), default="unknown")  # success, failed, running, unknown
-    last_run_number = Column(Integer)
-    last_run_url = Column(String(500))
-    last_run_time = Column(DateTime(timezone=True))
+    name = Column(String(255), nullable=False, unique=True)
+    kind = Column(String(50), nullable=False)  # github_actions, jenkins
+    config_json = Column(JSON)  # Provider-specific configuration
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    runs = relationship("WorkflowRun", back_populates="pipeline")
+    builds = relationship("Build", back_populates="provider")
 
-class WorkflowRun(Base):
-    __tablename__ = "workflow_runs"
+class Build(Base):
+    __tablename__ = "builds"
     
     id = Column(Integer, primary_key=True, index=True)
-    pipeline_id = Column(Integer, ForeignKey("pipelines.id"))
-    run_number = Column(Integer, nullable=False)
-    run_id = Column(String(100), nullable=False)  # GitHub run ID
-    status = Column(String(50), nullable=False)  # success, failure, cancelled, in_progress
-    conclusion = Column(String(50))  # success, failure, cancelled, skipped
-    start_time = Column(DateTime(timezone=True))
-    end_time = Column(DateTime(timezone=True))
-    duration = Column(Integer)  # in seconds
-    commit_hash = Column(String(100))
-    commit_message = Column(Text)
-    author = Column(String(255))
-    run_url = Column(String(500))
-    workflow_name = Column(String(255))
-    trigger = Column(String(50))  # push, pull_request, manual, etc.
-    metadata = Column(JSON)  # Additional GitHub-specific data
+    provider_id = Column(Integer, ForeignKey("providers.id"), nullable=False)
+    external_id = Column(String(255), nullable=False)  # External build ID from provider
+    status = Column(String(50), nullable=False)  # success, failed, running, queued
+    duration_seconds = Column(Integer)  # Build duration in seconds
+    branch = Column(String(100), default="main")
+    commit_sha = Column(String(100))
+    triggered_by = Column(String(255))  # User who triggered the build
+    started_at = Column(DateTime(timezone=True))
+    finished_at = Column(DateTime(timezone=True))
+    url = Column(String(500))  # Build URL
+    raw_payload = Column(JSON)  # Raw payload from provider
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    pipeline = relationship("Pipeline", back_populates="runs")
+    provider = relationship("Provider", back_populates="builds")
+    alerts = relationship("Alert", back_populates="build")
 
 class Alert(Base):
     __tablename__ = "alerts"
     
     id = Column(Integer, primary_key=True, index=True)
-    pipeline_id = Column(Integer, ForeignKey("pipelines.id"))
-    type = Column(String(50), nullable=False)  # workflow_failed, workflow_slow, pipeline_down
+    build_id = Column(Integer, ForeignKey("builds.id"), nullable=False)
+    channel = Column(String(50), nullable=False)  # slack, email
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    success = Column(Boolean, default=True)  # Whether alert was sent successfully
     message = Column(Text, nullable=False)
-    severity = Column(String(20), default="medium")  # low, medium, high, critical
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    resolved_at = Column(DateTime(timezone=True))
     
     # Relationships
-    pipeline = relationship("Pipeline")
+    build = relationship("Build", back_populates="alerts")
+
+class Settings(Base):
+    __tablename__ = "settings"
+    
+    id = Column(Integer, primary_key=True, default=1)
+    alert_email = Column(String(255))  # Email for alerts
+    slack_webhook_url = Column(String(500))  # Slack webhook URL
+    api_write_key = Column(String(255))  # API key for write operations
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+# Create indexes for performance
+Index('idx_builds_status_started', Build.status, Build.started_at)
+Index('idx_builds_provider_finished', Build.provider_id, Build.finished_at)
+Index('idx_builds_external_id', Build.external_id)
+Index('idx_alerts_build_id', Alert.build_id)
+Index('idx_providers_kind', Provider.kind)

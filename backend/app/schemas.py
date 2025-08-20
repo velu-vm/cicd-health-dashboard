@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -99,9 +99,99 @@ class HealthCheck(BaseModel):
     timestamp: datetime
     version: str
 
+# Summary metrics schemas
+class MetricsSummary(BaseModel):
+    total_builds: int = 0
+    success_rate: float = 0.0
+    failure_rate: float = 0.0
+    avg_build_time: Optional[float] = None  # in seconds
+    last_build_status: Optional[str] = None
+    builds_last_7d: int = 0
+    failed_builds_last_7d: int = 0
+
+# Build schemas
+class BuildBase(BaseModel):
+    external_id: str
+    status: str
+    branch: str = "main"
+    commit_sha: Optional[str] = None
+    triggered_by: Optional[str] = None
+    url: Optional[str] = None
+
+class BuildCreate(BuildBase):
+    provider_id: int
+    duration_seconds: Optional[int] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    raw_payload: Optional[Dict[str, Any]] = None
+
+class BuildUpdate(BaseModel):
+    status: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    finished_at: Optional[datetime] = None
+    raw_payload: Optional[Dict[str, Any]] = None
+
+class Build(BuildBase):
+    id: int
+    provider_id: int
+    duration_seconds: Optional[int] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    raw_payload: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    
+    # Provider info
+    provider_name: Optional[str] = None
+    provider_kind: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+# Build list response with pagination
+class BuildListResponse(BaseModel):
+    builds: List[Build]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
 # Webhook schemas
 class GitHubWebhookPayload(BaseModel):
     workflow_run: Dict[str, Any]
     workflow: Dict[str, Any]
     repository: Dict[str, Any]
     sender: Dict[str, Any]
+
+class JenkinsWebhookPayload(BaseModel):
+    name: str
+    url: str
+    build: Dict[str, Any]
+
+# Alert test schemas
+class AlertTestRequest(BaseModel):
+    channel: str = Field(..., regex="^(slack|email)$")
+    message: str = Field(..., min_length=1, max_length=1000)
+    severity: str = Field(default="info", regex="^(info|warning|error)$")
+
+class AlertTestResponse(BaseModel):
+    success: bool
+    message: str
+    channel: str
+
+# Seed data schemas
+class SeedRequest(BaseModel):
+    providers: Optional[List[Dict[str, Any]]] = None
+    builds: Optional[List[Dict[str, Any]]] = None
+
+class SeedResponse(BaseModel):
+    success: bool
+    message: str
+    providers_created: int = 0
+    builds_created: int = 0
+
+# Error response schema
+class ErrorResponse(BaseModel):
+    error: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+    timestamp: datetime = Field(default_factory=datetime.now)

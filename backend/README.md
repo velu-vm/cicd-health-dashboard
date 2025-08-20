@@ -1,23 +1,22 @@
 # CI/CD Health Dashboard - Backend
 
-FastAPI backend service for the CI/CD Health Dashboard.
+FastAPI backend service for the CI/CD Health Dashboard with SQLite support and comprehensive CI/CD monitoring.
 
 ## Features
 
-- RESTful API for pipeline monitoring
-- Support for GitHub Actions and Jenkins
-- Real-time webhook processing
-- Async database operations with SQLAlchemy
-- Comprehensive testing suite
-- Docker containerization
+- **Real-time Monitoring**: GitHub Actions and Jenkins webhook processing
+- **Metrics Dashboard**: Success rates, build times, and pipeline health
+- **Alert System**: Slack and email notifications with error handling
+- **SQLite First**: Local development with SQLite, production-ready for PostgreSQL
+- **API Security**: Write operations protected with API keys
+- **Comprehensive Testing**: Full test coverage for all endpoints
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.9+
-- PostgreSQL
-- Redis (optional, for caching)
+- SQLite (included with Python)
 
 ### Installation
 
@@ -36,10 +35,9 @@ FastAPI backend service for the CI/CD Health Dashboard.
    pip install -e .
    ```
 
-3. **Set up environment variables**
+3. **Initialize database**
    ```bash
-   cp ../../.env.example .env
-   # Edit .env with your configuration
+   python init_db.py
    ```
 
 4. **Run the application**
@@ -55,36 +53,77 @@ FastAPI backend service for the CI/CD Health Dashboard.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://user:password@localhost:5432/cicd_dashboard` |
+| `DATABASE_URL` | Database connection string | `sqlite+aiosqlite:///./data.db` |
 | `API_HOST` | API server host | `0.0.0.0` |
 | `API_PORT` | API server port | `8000` |
 | `DEBUG` | Enable debug mode | `false` |
-| `GITHUB_TOKEN` | GitHub API token | - |
-| `JENKINS_URL` | Jenkins server URL | - |
-| `JENKINS_USERNAME` | Jenkins username | - |
-| `JENKINS_API_TOKEN` | Jenkins API token | - |
 
 ## API Endpoints
 
-### Health Check
-- `GET /health` - Health check endpoint
+### Public Endpoints
+- `GET /health` - Health check
+- `GET /api/metrics/summary` - Dashboard metrics
+- `GET /api/builds` - List builds with pagination
+- `GET /api/builds/{id}` - Build details
+- `POST /api/webhook/github-actions` - GitHub Actions webhook
+- `POST /api/webhook/jenkins` - Jenkins webhook
 
-### Alerts
-- `GET /api/v1/alerts` - List all alerts
-- `GET /api/v1/alerts/{alert_id}` - Get specific alert
-- `POST /api/v1/alerts` - Create new alert
-- `PUT /api/v1/alerts/{alert_id}` - Update alert
-- `DELETE /api/v1/alerts/{alert_id}` - Delete alert
+### Protected Endpoints (Require X-API-KEY header)
+- `POST /api/alert/test` - Test alert delivery
+- `POST /api/seed` - Seed database with sample data
 
-### Documentation
-- `GET /docs` - Interactive API documentation (Swagger UI)
-- `GET /openapi.json` - OpenAPI schema
+### Default API Key
+For development, the default API key is: `dev-write-key-change-in-production`
+
+## Database Schema
+
+### Core Tables
+- **providers**: CI/CD provider configuration
+- **builds**: Build/run information with status tracking
+- **alerts**: Alert history and delivery status
+- **settings**: Application configuration and API keys
+
+### Indexes
+- `idx_builds_status_started`: Performance for status queries
+- `idx_builds_provider_finished`: Provider-specific queries
+- `idx_builds_external_id`: External ID lookups
+
+## Webhook Integration
+
+### GitHub Actions
+Accepts `workflow_run` events and automatically:
+- Creates/updates providers
+- Tracks workflow runs
+- Calculates build duration
+- Stores raw payload for debugging
+
+### Jenkins
+Accepts Jenkins webhook payloads and:
+- Creates Jenkins providers
+- Tracks build status
+- Maintains build history
+
+## Alert System
+
+### Supported Channels
+- **Slack**: Webhook-based notifications
+- **Email**: SMTP-based delivery
+
+### Error Handling
+- Non-blocking: Alerts don't crash the pipeline
+- Comprehensive logging
+- Graceful degradation
 
 ## Development
 
 ### Running Tests
 ```bash
 pytest
+```
+
+### Database Initialization
+```bash
+python init_db.py
 ```
 
 ### Code Formatting
@@ -98,32 +137,41 @@ isort .
 mypy .
 ```
 
-### Linting
-```bash
-flake8 .
+## Production Deployment
+
+### Database Migration
+The application is designed to work with both SQLite and PostgreSQL:
+
+```python
+# Development (SQLite)
+DATABASE_URL=sqlite+aiosqlite:///./data.db
+
+# Production (PostgreSQL)
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
 ```
 
-## Docker
-
-Build and run with Docker:
-
+### Environment Configuration
 ```bash
-# Build image
-docker build -f ../../ops/docker/backend.Dockerfile -t cicd-dashboard-backend .
-
-# Run container
-docker run -p 8000:8000 cicd-dashboard-backend
+# Production settings
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/cicd_dashboard
+DEBUG=false
+API_WRITE_KEY=your-secure-production-key
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=app_password
 ```
 
 ## Architecture
 
-The backend follows a clean architecture pattern:
+The backend follows a clean, async-first architecture:
 
-- **Models**: SQLAlchemy ORM models for database entities
-- **Schemas**: Pydantic models for API validation
-- **Providers**: External service integrations (GitHub Actions, Jenkins)
-- **Dependencies**: FastAPI dependency injection utilities
-- **Utils**: Common utility functions
+- **Models**: SQLAlchemy ORM with proper relationships
+- **Schemas**: Pydantic validation and serialization
+- **Dependencies**: FastAPI dependency injection
+- **Alerts**: Non-blocking notification system
+- **Webhooks**: Real-time CI/CD integration
 
 ## Contributing
 

@@ -2,9 +2,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import MetaData
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/cicd_dashboard")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data.db")
 
 # Create async engine
 engine = create_async_engine(
@@ -12,6 +16,7 @@ engine = create_async_engine(
     echo=os.getenv("DEBUG", "false").lower() == "true",
     pool_pre_ping=True,
     pool_recycle=300,
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 
 # Create async session factory
