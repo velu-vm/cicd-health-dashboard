@@ -18,6 +18,88 @@ class GitHubActionsProvider:
             "Accept": "application/vnd.github.v3+json"
         } if self.token else {}
     
+    def parse_workflow_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse GitHub Actions webhook payload into normalized Build format"""
+        try:
+            workflow_run = payload.get("workflow_run", {})
+            repository = payload.get("repository", {})
+            
+            # Extract basic information
+            external_id = str(workflow_run.get("id"))
+            status = self._normalize_status(workflow_run.get("conclusion") or workflow_run.get("status"))
+            
+            # Calculate duration
+            duration_seconds = None
+            started_at = None
+            finished_at = None
+            
+            if workflow_run.get("run_started_at") and workflow_run.get("updated_at"):
+                started_at = datetime.fromisoformat(workflow_run["run_started_at"].replace("Z", "+00:00"))
+                finished_at = datetime.fromisoformat(workflow_run["updated_at"].replace("Z", "+00:00"))
+                duration_seconds = int((finished_at - started_at).total_seconds())
+            
+            # Extract commit information
+            head_commit = workflow_run.get("head_commit", {})
+            commit_sha = head_commit.get("id")
+            commit_message = head_commit.get("message", "").split("\n")[0]  # First line only
+            
+            # Extract author information
+            author = None
+            if head_commit.get("author", {}).get("name"):
+                author = head_commit["author"]["name"]
+            elif workflow_run.get("triggering_actor", {}).get("login"):
+                author = workflow_run["triggering_actor"]["login"]
+            
+            # Extract branch information
+            branch = workflow_run.get("head_branch", "main")
+            
+            # Build URL
+            url = workflow_run.get("html_url")
+            
+            # Raw payload for debugging
+            raw_payload = payload
+            
+            return {
+                "external_id": external_id,
+                "status": status,
+                "duration_seconds": duration_seconds,
+                "branch": branch,
+                "commit_sha": commit_sha,
+                "commit_message": commit_message,
+                "triggered_by": author,
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "url": url,
+                "raw_payload": raw_payload,
+                "metadata": {
+                    "workflow_name": workflow_run.get("name"),
+                    "event": workflow_run.get("event"),
+                    "run_number": workflow_run.get("run_number"),
+                    "repository": repository.get("full_name"),
+                    "pull_request": workflow_run.get("pull_requests", []),
+                    "conclusion": workflow_run.get("conclusion"),
+                    "run_attempt": workflow_run.get("run_attempt")
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to parse GitHub Actions workflow run: {e}")
+            raise
+    
+    def _normalize_status(self, status: str) -> str:
+        """Normalize GitHub Actions status to standard statuses"""
+        status_mapping = {
+            "success": "success",
+            "failure": "failed",
+            "cancelled": "failed",
+            "skipped": "success",
+            "in_progress": "running",
+            "queued": "queued",
+            "waiting": "queued",
+            "neutral": "success"
+        }
+        return status_mapping.get(status, "unknown")
+    
     async def fetch_workflow_runs(
         self, 
         owner: str, 

@@ -1,56 +1,51 @@
 -- Seed data for CI/CD Health Dashboard
--- This file contains sample data for development and testing
+-- This file contains sample data to populate the database for testing
 
--- Insert sample pipelines
-INSERT INTO pipelines (name, repository, owner, branch, workflow_file, status, last_run_number, last_run_url, last_run_time, created_at, updated_at) VALUES
-('Frontend CI/CD', 'frontend-app', 'myorg', 'main', '.github/workflows/frontend.yml', 'success', 42, 'https://github.com/myorg/frontend-app/actions/runs/42', NOW() - INTERVAL '1 hour', NOW(), NOW()),
-('Backend API', 'backend-api', 'myorg', 'main', '.github/workflows/backend.yml', 'success', 156, 'https://github.com/myorg/backend-api/actions/runs/156', NOW() - INTERVAL '30 minutes', NOW(), NOW()),
-('Mobile App', 'mobile-app', 'myorg', 'develop', '.github/workflows/mobile.yml', 'running', 89, 'https://github.com/myorg/mobile-app/actions/runs/89', NOW() - INTERVAL '15 minutes', NOW(), NOW()),
-('Infrastructure', 'infra-as-code', 'myorg', 'main', '.github/workflows/terraform.yml', 'failed', 23, 'https://github.com/myorg/infra-as-code/actions/runs/23', NOW() - INTERVAL '2 hours', NOW(), NOW());
+-- Insert default settings
+INSERT OR REPLACE INTO settings (id, alert_email, smtp_host, smtp_port, smtp_username, smtp_password, api_write_key, updated_at) 
+VALUES (
+    1, 
+    'alerts@example.com',
+    'smtp.gmail.com',
+    587,
+    'alerts@example.com',
+    'your-app-password',
+    'dev-write-key-change-in-production',
+    CURRENT_TIMESTAMP
+);
 
--- Insert sample workflow runs
-INSERT INTO workflow_runs (pipeline_id, run_number, run_id, status, conclusion, start_time, end_time, duration, commit_hash, commit_message, author, run_url, workflow_name, trigger, metadata, created_at) VALUES
-(1, 42, '123456789', 'success', 'success', NOW() - INTERVAL '1 hour 5 minutes', NOW() - INTERVAL '1 hour', 300, 'abc123def456', 'feat: add new dashboard component', 'john.doe', 'https://github.com/myorg/frontend-app/actions/runs/42', 'Frontend CI/CD', 'push', '{"actor": "john.doe", "head_branch": "main"}', NOW()),
-(1, 41, '123456788', 'success', 'success', NOW() - INTERVAL '2 hours 5 minutes', NOW() - INTERVAL '2 hours', 280, 'def456ghi789', 'fix: resolve styling issues', 'jane.smith', 'https://github.com/myorg/frontend-app/actions/runs/41', 'Frontend CI/CD', 'push', '{"actor": "jane.smith", "head_branch": "main"}', NOW()),
-(2, 156, '987654321', 'success', 'success', NOW() - INTERVAL '30 minutes 3 minutes', NOW() - INTERVAL '30 minutes', 180, 'ghi789jkl012', 'feat: add new API endpoint', 'bob.wilson', 'https://github.com/myorg/backend-api/actions/runs/156', 'Backend API', 'pull_request', '{"actor": "bob.wilson", "head_branch": "feature/new-endpoint"}', NOW()),
-(3, 89, '456789123', 'running', NULL, NOW() - INTERVAL '15 minutes', NULL, NULL, 'jkl012mno345', 'feat: implement push notifications', 'alice.johnson', 'https://github.com/myorg/mobile-app/actions/runs/89', 'Mobile App', 'push', '{"actor": "alice.johnson", "head_branch": "develop"}', NOW()),
-(4, 23, '789123456', 'failed', 'failure', NOW() - INTERVAL '2 hours 10 minutes', NOW() - INTERVAL '2 hours', 600, 'mno345pqr678', 'feat: add new cloud resources', 'charlie.brown', 'https://github.com/myorg/infra-as-code/actions/runs/23', 'Infrastructure', 'push', '{"actor": "charlie.brown", "head_branch": "main"}', NOW());
+-- Insert sample GitHub Actions providers
+INSERT OR REPLACE INTO providers (id, name, kind, config_json, created_at) VALUES
+(1, 'github-myorg/frontend-app', 'github_actions', '{"repository": "myorg/frontend-app", "description": "Frontend React application"}', CURRENT_TIMESTAMP),
+(2, 'github-myorg/backend-api', 'github_actions', '{"repository": "myorg/backend-api", "description": "Backend FastAPI service"}', CURRENT_TIMESTAMP),
+(3, 'github-myorg/mobile-app', 'github_actions', '{"repository": "myorg/mobile-app", "description": "Mobile React Native application"}', CURRENT_TIMESTAMP),
+(4, 'github-myorg/infrastructure', 'github_actions', '{"repository": "myorg/infrastructure", "description": "Infrastructure as Code repository"}', CURRENT_TIMESTAMP);
+
+-- Insert sample GitHub Actions builds
+INSERT OR REPLACE INTO builds (id, provider_id, external_id, status, duration_seconds, branch, commit_sha, triggered_by, started_at, finished_at, url, raw_payload, created_at) VALUES
+-- Frontend app builds
+(1, 1, '123456789', 'success', 180, 'main', 'abc123def456789abcdef123456789abcdef1234', 'johndoe', '2024-01-15 10:30:00', '2024-01-15 10:33:00', 'https://github.com/myorg/frontend-app/actions/runs/123456789', '{"workflow_run": {"id": 123456789, "conclusion": "success"}}', '2024-01-15 10:30:00'),
+(2, 1, '123456790', 'failed', 120, 'feature/new-component', 'def456ghi789abcdef123456789abcdef123456', 'janedoe', '2024-01-15 11:00:00', '2024-01-15 11:02:00', 'https://github.com/myorg/frontend-app/actions/runs/123456790', '{"workflow_run": {"id": 123456790, "conclusion": "failure"}}', '2024-01-15 11:00:00'),
+(3, 1, '123456791', 'running', NULL, 'feature/dark-mode', 'ghi789jkl012abcdef123456789abcdef123456', 'bobsmith', '2024-01-15 12:00:00', NULL, 'https://github.com/myorg/frontend-app/actions/runs/123456791', '{"workflow_run": {"id": 123456791, "status": "in_progress"}}', '2024-01-15 12:00:00'),
+
+-- Backend API builds
+(4, 2, '987654321', 'success', 300, 'main', 'jkl012mno345abcdef123456789abcdef123456', 'alicejohnson', '2024-01-15 09:00:00', '2024-01-15 09:05:00', 'https://github.com/myorg/backend-api/actions/runs/987654321', '{"workflow_run": {"id": 987654321, "conclusion": "success"}}', '2024-01-15 09:00:00'),
+(5, 2, '987654322', 'success', 280, 'feature/api-improvements', 'mno345pqr678abcdef123456789abcdef123456', 'charliebrown', '2024-01-15 14:00:00', '2024-01-15 14:04:40', 'https://github.com/myorg/backend-api/actions/runs/987654322', '{"workflow_run": {"id": 987654322, "conclusion": "success"}}', '2024-01-15 14:00:00'),
+(6, 2, '987654323', 'queued', NULL, 'feature/database-optimization', 'pqr678stu901abcdef123456789abcdef123456', 'davidwilson', NULL, NULL, 'https://github.com/myorg/backend-api/actions/runs/987654323', '{"workflow_run": {"id": 987654323, "status": "queued"}}', '2024-01-15 16:00:00'),
+
+-- Mobile app builds
+(7, 3, '456789123', 'success', 420, 'main', 'stu901vwx234abcdef123456789abcdef123456', 'emilydavis', '2024-01-15 08:00:00', '2024-01-15 08:07:00', 'https://github.com/myorg/mobile-app/actions/runs/456789123', '{"workflow_run": {"id": 456789123, "conclusion": "success"}}', '2024-01-15 08:00:00'),
+(8, 3, '456789124', 'failed', 600, 'feature/push-notifications', 'vwx234yza567abcdef123456789abcdef123456', 'frankmiller', '2024-01-15 15:00:00', '2024-01-15 15:10:00', 'https://github.com/myorg/mobile-app/actions/runs/456789124', '{"workflow_run": {"id": 456789124, "conclusion": "failure"}}', '2024-01-15 15:00:00'),
+
+-- Infrastructure builds
+(9, 4, '789123456', 'success', 900, 'main', 'yza567bcd890abcdef123456789abcdef123456', 'gracelee', '2024-01-15 07:00:00', '2024-01-15 07:15:00', 'https://github.com/myorg/infrastructure/actions/runs/789123456', '{"workflow_run": {"id": 789123456, "conclusion": "success"}}', '2024-01-15 07:00:00'),
+(10, 4, '789123457', 'running', NULL, 'feature/new-region', 'bcd890efg123abcdef123456789abcdef123456', 'henrytaylor', '2024-01-15 13:00:00', NULL, 'https://github.com/myorg/infrastructure/actions/runs/789123457', '{"workflow_run": {"id": 789123457, "status": "in_progress"}}', '2024-01-15 13:00:00');
 
 -- Insert sample alerts
-INSERT INTO alerts (pipeline_id, type, message, severity, is_active, created_at) VALUES
-(4, 'workflow_failed', 'Infrastructure pipeline failed on commit mno345pqr678', 'high', true, NOW() - INTERVAL '2 hours'),
-(3, 'workflow_slow', 'Mobile app pipeline has been running for over 15 minutes', 'medium', true, NOW() - INTERVAL '5 minutes'),
-(1, 'workflow_success', 'Frontend pipeline completed successfully', 'low', false, NOW() - INTERVAL '1 hour');
-
--- Update pipeline status based on latest runs
-UPDATE pipelines SET 
-    status = 'success',
-    last_run_number = 42,
-    last_run_url = 'https://github.com/myorg/frontend-app/actions/runs/42',
-    last_run_time = NOW() - INTERVAL '1 hour',
-    updated_at = NOW()
-WHERE id = 1;
-
-UPDATE pipelines SET 
-    status = 'success',
-    last_run_number = 156,
-    last_run_url = 'https://github.com/myorg/backend-api/actions/runs/156',
-    last_run_time = NOW() - INTERVAL '30 minutes',
-    updated_at = NOW()
-WHERE id = 2;
-
-UPDATE pipelines SET 
-    status = 'running',
-    last_run_number = 89,
-    last_run_url = 'https://github.com/myorg/mobile-app/actions/runs/89',
-    last_run_time = NOW() - INTERVAL '15 minutes',
-    updated_at = NOW()
-WHERE id = 3;
-
-UPDATE pipelines SET 
-    status = 'failed',
-    last_run_number = 23,
-    last_run_url = 'https://github.com/myorg/infra-as-code/actions/runs/23',
-    last_run_time = NOW() - INTERVAL '2 hours',
-    updated_at = NOW()
-WHERE id = 4;
+INSERT OR REPLACE INTO alerts (id, build_id, channel, sent_at, success, message) VALUES
+(1, 2, 'email', '2024-01-15 11:02:30', true, 'Build failed for frontend-app on branch feature/new-component. Commit: def456ghi789abcdef123456789abcdef123456'),
+(2, 8, 'email', '2024-01-15 15:10:30', true, 'Build failed for mobile-app on branch feature/push-notifications. Build failed after 10 minutes.'),
+(3, 4, 'email', '2024-01-15 09:05:30', true, 'Backend API build succeeded on main branch. Build completed in 5 minutes.'),
+(4, 1, 'email', '2024-01-15 10:33:30', true, 'Frontend app build succeeded on main branch. Build completed in 3 minutes.'),
+(5, 7, 'email', '2024-01-15 08:07:30', true, 'Mobile app build succeeded on main branch. Build completed in 7 minutes.'),
+(6, 9, 'email', '2024-01-15 07:15:30', true, 'Infrastructure build succeeded on main branch. Build completed in 15 minutes.');

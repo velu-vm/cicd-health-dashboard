@@ -1,10 +1,10 @@
 # CI/CD Health Dashboard - Backend
 
-FastAPI backend service for the CI/CD Health Dashboard with SQLite support and comprehensive CI/CD monitoring.
+FastAPI backend service for the CI/CD Health Dashboard with SQLite support and comprehensive GitHub Actions monitoring.
 
 ## Features
 
-- **Real-time Monitoring**: GitHub Actions and Jenkins webhook processing
+- **Real-time Monitoring**: GitHub Actions webhook processing
 - **Metrics Dashboard**: Success rates, build times, and pipeline health
 - **Email Alert System**: SMTP-based notifications with error handling
 - **SQLite First**: Local development with SQLite, production-ready for PostgreSQL
@@ -66,7 +66,6 @@ FastAPI backend service for the CI/CD Health Dashboard with SQLite support and c
 - `GET /api/builds` - List builds with pagination
 - `GET /api/builds/{id}` - Build details
 - `POST /api/webhook/github-actions` - GitHub Actions webhook
-- `POST /api/webhook/jenkins` - Jenkins webhook
 
 ### Protected Endpoints (Require X-API-KEY header)
 - `POST /api/alert/test` - Test email alert delivery
@@ -78,8 +77,8 @@ For development, the default API key is: `dev-write-key-change-in-production`
 ## Database Schema
 
 ### Core Tables
-- **providers**: CI/CD provider configuration
-- **builds**: Build/run information with status tracking
+- **providers**: GitHub Actions repository configuration
+- **builds**: Workflow run information with status tracking
 - **alerts**: Alert history and delivery status
 - **settings**: Application configuration, SMTP settings, and API keys
 
@@ -92,16 +91,19 @@ For development, the default API key is: `dev-write-key-change-in-production`
 
 ### GitHub Actions
 Accepts `workflow_run` events and automatically:
-- Creates/updates providers
-- Tracks workflow runs
-- Calculates build duration
-- Stores raw payload for debugging
+- Creates/updates providers for repositories
+- Tracks workflow runs with detailed metadata
+- Calculates build duration from start/end times
+- Stores raw payload for debugging and analysis
+- Supports all workflow statuses: success, failed, running, queued
 
-### Jenkins
-Accepts Jenkins webhook payloads and:
-- Creates Jenkins providers
-- Tracks build status
-- Maintains build history
+### Webhook Payload Parsing
+The system includes a comprehensive parser that extracts:
+- **Build Information**: ID, status, duration, branch, commit SHA
+- **Timing Data**: Start time, end time, duration in seconds
+- **Repository Details**: Owner, repository name, workflow name
+- **Trigger Information**: Event type, actor, pull request details
+- **Metadata**: Run number, workflow ID, conclusion status
 
 ## Alert System
 
@@ -158,7 +160,7 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
 ### Environment Configuration
 ```bash
 # Production settings
-DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/cicd_dashboard
+DATABASE_URL=postgresql+asyncpg://user:pass@host:543d/cicd_dashboard
 DEBUG=false
 API_WRITE_KEY=your-secure-production-key
 SMTP_HOST=smtp.gmail.com
@@ -196,13 +198,14 @@ SMTP_PASSWORD=your-password
 
 ## Architecture
 
-The backend follows a clean, async-first architecture:
+The backend follows a clean, async-first architecture focused on GitHub Actions:
 
 - **Models**: SQLAlchemy ORM with proper relationships
 - **Schemas**: Pydantic validation and serialization
 - **Dependencies**: FastAPI dependency injection
 - **Alerts**: Non-blocking email notification system
-- **Webhooks**: Real-time CI/CD integration
+- **Webhooks**: Real-time GitHub Actions integration
+- **Providers**: GitHub Actions-specific data parsing and normalization
 
 ## Contributing
 

@@ -88,22 +88,6 @@ def test_webhook_github_actions():
     assert response.status_code == 200
     assert response.json()["status"] == "processed"
 
-def test_webhook_jenkins():
-    """Test Jenkins webhook endpoint"""
-    payload = {
-        "name": "test-job",
-        "url": "http://jenkins.example.com/job/test-job",
-        "build": {
-            "number": 42,
-            "result": "SUCCESS",
-            "url": "http://jenkins.example.com/job/test-job/42"
-        }
-    }
-    
-    response = client.post("/api/webhook/jenkins", json=payload)
-    assert response.status_code == 200
-    assert response.json()["status"] == "processed"
-
 def test_alert_test_without_key():
     """Test alert test endpoint without API key"""
     payload = {

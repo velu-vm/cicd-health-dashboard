@@ -35,7 +35,7 @@ async def create_default_settings():
             print("✅ Settings already exist")
 
 async def create_default_providers():
-    """Create default providers if they don't exist"""
+    """Create default GitHub Actions providers if they don't exist"""
     async with AsyncSessionLocal() as session:
         # Check if GitHub Actions provider exists
         result = await session.execute(
@@ -50,23 +50,10 @@ async def create_default_providers():
                 config_json={"description": "Default GitHub Actions provider"}
             )
             session.add(github_provider)
-        
-        # Check if Jenkins provider exists
-        result = await session.execute(
-            select(Provider).where(Provider.name == "jenkins-default")
-        )
-        jenkins_provider = result.scalar_one_or_none()
-        
-        if not jenkins_provider:
-            jenkins_provider = Provider(
-                name="jenkins-default",
-                kind="jenkins",
-                config_json={"description": "Default Jenkins provider"}
-            )
-            session.add(jenkins_provider)
-        
-        await session.commit()
-        print("✅ Default providers created")
+            await session.commit()
+            print("✅ Default GitHub Actions provider created")
+        else:
+            print("✅ Default GitHub Actions provider already exists")
 
 async def main():
     """Main initialization function"""

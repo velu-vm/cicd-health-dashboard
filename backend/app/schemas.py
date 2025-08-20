@@ -162,11 +162,6 @@ class GitHubWebhookPayload(BaseModel):
     repository: Dict[str, Any]
     sender: Dict[str, Any]
 
-class JenkinsWebhookPayload(BaseModel):
-    name: str
-    url: str
-    build: Dict[str, Any]
-
 # Alert test schemas
 class AlertTestRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=1000)

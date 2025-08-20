@@ -13,11 +13,12 @@ from .db import init_db, get_db
 from .models import Provider, Build, Alert, Settings
 from .schemas import (
     MetricsSummary, BuildListResponse, Build as BuildSchema,
-    GitHubWebhookPayload, JenkinsWebhookPayload,
+    GitHubWebhookPayload,
     AlertTestRequest, AlertTestResponse, SeedRequest, SeedResponse
 )
 from .deps import get_pagination_params, verify_write_key
 from .alerts import send_alert
+from .providers.github_actions import GitHubActionsProvider
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CI/CD Health Dashboard API",
-    description="API for monitoring CI/CD pipeline health",
+    description="API for monitoring CI/CD pipeline health using GitHub Actions",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -42,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize GitHub Actions provider
+github_provider = GitHubActionsProvider()
 
 @app.get("/health")
 async def health_check():
@@ -218,12 +222,12 @@ async def github_webhook(
 ):
     """Handle GitHub Actions webhook"""
     try:
-        # Extract workflow run data
-        workflow_run = payload.workflow_run
-        repository = payload.repository
+        # Parse the webhook payload using the provider
+        parsed_data = github_provider.parse_workflow_run(payload.dict())
         
         # Get or create provider
-        provider_name = f"github-{repository['full_name']}"
+        repository = payload.repository
+        provider_name = f"github-{repository.full_name}"
         result = await session.execute(
             select(Provider).where(Provider.name == provider_name)
         )
@@ -233,14 +237,14 @@ async def github_webhook(
             provider = Provider(
                 name=provider_name,
                 kind="github_actions",
-                config_json={"repository": repository['full_name']}
+                config_json={"repository": repository.full_name}
             )
             session.add(provider)
             await session.commit()
             await session.refresh(provider)
         
         # Create or update build
-        external_id = str(workflow_run['id'])
+        external_id = parsed_data["external_id"]
         result = await session.execute(
             select(Build).where(
                 and_(Build.provider_id == provider.id, Build.external_id == external_id)
@@ -250,85 +254,25 @@ async def github_webhook(
         
         if build:
             # Update existing build
-            build.status = workflow_run['conclusion'] or workflow_run['status']
-            build.duration_seconds = None
-            if workflow_run.get('run_started_at') and workflow_run.get('updated_at'):
-                start_time = datetime.fromisoformat(workflow_run['run_started_at'].replace('Z', '+00:00'))
-                end_time = datetime.fromisoformat(workflow_run['updated_at'].replace('Z', '+00:00'))
-                build.started_at = start_time
-                build.finished_at = end_time
-                build.duration_seconds = int((end_time - start_time).total_seconds())
-            build.raw_payload = payload.dict()
+            build.status = parsed_data["status"]
+            build.duration_seconds = parsed_data["duration_seconds"]
+            build.started_at = parsed_data["started_at"]
+            build.finished_at = parsed_data["finished_at"]
+            build.raw_payload = parsed_data["raw_payload"]
         else:
             # Create new build
             build = Build(
                 provider_id=provider.id,
                 external_id=external_id,
-                status=workflow_run['conclusion'] or workflow_run['status'],
-                branch=workflow_run.get('head_branch', 'main'),
-                commit_sha=workflow_run.get('head_sha'),
-                triggered_by=workflow_run.get('actor', {}).get('login'),
-                url=workflow_run.get('html_url'),
-                raw_payload=payload.dict()
-            )
-            session.add(build)
-        
-        await session.commit()
-        return {"status": "processed"}
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process webhook: {str(e)}"
-        )
-
-@app.post("/api/webhook/jenkins")
-async def jenkins_webhook(
-    payload: JenkinsWebhookPayload,
-    session: AsyncSession = Depends(get_db)
-):
-    """Handle Jenkins webhook"""
-    try:
-        # Get or create provider
-        provider_name = f"jenkins-{payload.name}"
-        result = await session.execute(
-            select(Provider).where(Provider.name == provider_name)
-        )
-        provider = result.scalar_one_or_none()
-        
-        if not provider:
-            provider = Provider(
-                name=provider_name,
-                kind="jenkins",
-                config_json={"url": payload.url}
-            )
-            session.add(provider)
-            await session.commit()
-            await session.refresh(provider)
-        
-        # Create or update build
-        build_data = payload.build
-        external_id = str(build_data.get('number', build_data.get('id')))
-        
-        result = await session.execute(
-            select(Build).where(
-                and_(Build.provider_id == provider.id, Build.external_id == external_id)
-            )
-        )
-        build = result.scalar_one_or_none()
-        
-        if build:
-            # Update existing build
-            build.status = build_data.get('result', 'unknown')
-            build.raw_payload = payload.dict()
-        else:
-            # Create new build
-            build = Build(
-                provider_id=provider.id,
-                external_id=external_id,
-                status=build_data.get('result', 'unknown'),
-                url=build_data.get('url'),
-                raw_payload=payload.dict()
+                status=parsed_data["status"],
+                duration_seconds=parsed_data["duration_seconds"],
+                branch=parsed_data["branch"],
+                commit_sha=parsed_data["commit_sha"],
+                triggered_by=parsed_data["triggered_by"],
+                started_at=parsed_data["started_at"],
+                finished_at=parsed_data["finished_at"],
+                url=parsed_data["url"],
+                raw_payload=parsed_data["raw_payload"]
             )
             session.add(build)
         
