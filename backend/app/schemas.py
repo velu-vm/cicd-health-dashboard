@@ -101,13 +101,12 @@ class HealthCheck(BaseModel):
 
 # Summary metrics schemas
 class MetricsSummary(BaseModel):
-    total_builds: int = 0
+    window_days: int = 7
     success_rate: float = 0.0
     failure_rate: float = 0.0
-    avg_build_time: Optional[float] = None  # in seconds
+    avg_build_time_seconds: Optional[float] = None  # in seconds
     last_build_status: Optional[str] = None
-    builds_last_7d: int = 0
-    failed_builds_last_7d: int = 0
+    last_updated: str = ""  # ISO8601 timestamp
 
 # Build schemas
 class BuildBase(BaseModel):

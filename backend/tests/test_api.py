@@ -24,11 +24,12 @@ def test_metrics_summary_empty_db():
     response = client.get("/api/metrics/summary")
     assert response.status_code == 200
     data = response.json()
-    assert data["total_builds"] == 0
+    assert data["window_days"] == 7
     assert data["success_rate"] == 0.0
     assert data["failure_rate"] == 0.0
-    assert data["builds_last_7d"] == 0
-    assert data["failed_builds_last_7d"] == 0
+    assert data["avg_build_time_seconds"] is None
+    assert data["last_build_status"] is None
+    assert "last_updated" in data
 
 def test_builds_endpoint_empty_db():
     """Test builds endpoint with empty database"""

@@ -54,59 +54,99 @@ async def health_check():
 
 @app.get("/api/metrics/summary", response_model=MetricsSummary)
 async def get_metrics_summary(session: AsyncSession = Depends(get_db)):
-    """Get dashboard summary metrics"""
+    """Get dashboard summary metrics for the last 7 days"""
     try:
-        # Get total builds
-        result = await session.execute(select(func.count(Build.id)))
-        total_builds = result.scalar() or 0
+        # Calculate time window: last 7 days from now
+        now = datetime.now()
+        seven_days_ago = now - timedelta(days=7)
         
-        # Get builds from last 7 days
-        seven_days_ago = datetime.now() - timedelta(days=7)
+        # Get builds started in the last 7 days
         result = await session.execute(
-            select(func.count(Build.id)).where(Build.created_at >= seven_days_ago)
+            select(func.count(Build.id)).where(Build.started_at >= seven_days_ago)
         )
-        builds_last_7d = result.scalar() or 0
+        builds_in_window = result.scalar() or 0
         
-        # Get failed builds from last 7 days
+        # Get completed builds (success + failed) in the last 7 days
         result = await session.execute(
             select(func.count(Build.id)).where(
-                and_(Build.created_at >= seven_days_ago, Build.status == "failed")
+                and_(
+                    Build.started_at >= seven_days_ago,
+                    Build.status.in_(["success", "failed"]),
+                    Build.finished_at.isnot(None)
+                )
             )
         )
-        failed_builds_last_7d = result.scalar() or 0
+        completed_builds = result.scalar() or 0
         
-        # Calculate success rate
+        # Get successful builds in the last 7 days
+        result = await session.execute(
+            select(func.count(Build.id)).where(
+                and_(
+                    Build.started_at >= seven_days_ago,
+                    Build.status == "success",
+                    Build.finished_at.isnot(None)
+                )
+            )
+        )
+        successful_builds = result.scalar() or 0
+        
+        # Get failed builds in the last 7 days
+        result = await session.execute(
+            select(func.count(Build.id)).where(
+                and_(
+                    Build.started_at >= seven_days_ago,
+                    Build.status == "failed",
+                    Build.finished_at.isnot(None)
+                )
+            )
+        )
+        failed_builds = result.scalar() or 0
+        
+        # Calculate success and failure rates
         success_rate = 0.0
-        if builds_last_7d > 0:
-            success_rate = (builds_last_7d - failed_builds_last_7d) / builds_last_7d
+        failure_rate = 0.0
+        if completed_builds > 0:
+            success_rate = successful_builds / completed_builds
+            failure_rate = failed_builds / completed_builds
         
-        # Get average build time for completed builds
+        # Get average build time for completed builds in the last 7 days
         result = await session.execute(
             select(func.avg(Build.duration_seconds)).where(
-                and_(Build.status.in_(["success", "failed"]), Build.duration_seconds.isnot(None))
+                and_(
+                    Build.started_at >= seven_days_ago,
+                    Build.status.in_(["success", "failed"]),
+                    Build.finished_at.isnot(None),
+                    Build.duration_seconds.isnot(None)
+                )
             )
         )
-        avg_build_time = result.scalar()
+        avg_build_time_seconds = result.scalar()
         
-        # Get last build status
+        # Get last build status (most recently started build)
         result = await session.execute(
-            select(Build.status).order_by(Build.created_at.desc()).limit(1)
+            select(Build.status).order_by(Build.started_at.desc()).limit(1)
         )
         last_build_status = result.scalar()
         
         return MetricsSummary(
-            total_builds=total_builds,
+            window_days=7,
             success_rate=success_rate,
-            failure_rate=1.0 - success_rate,
-            avg_build_time=avg_build_time,
+            failure_rate=failure_rate,
+            avg_build_time_seconds=avg_build_time_seconds,
             last_build_status=last_build_status,
-            builds_last_7d=builds_last_7d,
-            failed_builds_last_7d=failed_builds_last_7d
+            last_updated=now.isoformat()
         )
         
     except Exception as e:
         # Return default values if database query fails
-        return MetricsSummary()
+        return MetricsSummary(
+            window_days=7,
+            success_rate=0.0,
+            failure_rate=0.0,
+            avg_build_time_seconds=None,
+            last_build_status=None,
+            last_updated=datetime.now().isoformat()
+        )
 
 @app.get("/api/builds", response_model=BuildListResponse)
 async def get_builds(
