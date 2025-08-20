@@ -6,7 +6,7 @@ FastAPI backend service for the CI/CD Health Dashboard with SQLite support and c
 
 - **Real-time Monitoring**: GitHub Actions webhook processing
 - **Metrics Dashboard**: Success rates, build times, and pipeline health
-- **Email Alert System**: SMTP-based notifications with error handling
+- **Email Alert System**: Automatic alerts for failed builds with debouncing
 - **SQLite First**: Local development with SQLite, production-ready for PostgreSQL
 - **API Security**: Write operations protected with API keys
 - **Comprehensive Testing**: Full test coverage for all endpoints
@@ -35,12 +35,18 @@ FastAPI backend service for the CI/CD Health Dashboard with SQLite support and c
    pip install -e .
    ```
 
-3. **Initialize database**
+3. **Configure environment variables**
+   ```bash
+   # Copy and edit the example
+   cp .env.example .env
+   ```
+
+4. **Initialize database**
    ```bash
    python init_db.py
    ```
 
-4. **Run the application**
+5. **Run the application**
    ```bash
    # Development
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -57,6 +63,11 @@ FastAPI backend service for the CI/CD Health Dashboard with SQLite support and c
 | `API_HOST` | API server host | `0.0.0.0` |
 | `API_PORT` | API server port | `8000` |
 | `DEBUG` | Enable debug mode | `false` |
+| `ALERTS_ENABLED` | Enable/disable email alerts | `true` |
+| `SMTP_HOST` | SMTP server hostname | Required |
+| `SMTP_PORT` | SMTP server port | `587` |
+| `SMTP_USERNAME` | SMTP username/email | Required |
+| `SMTP_PASSWORD` | SMTP password or app password | Required |
 
 ## API Endpoints
 
@@ -79,8 +90,8 @@ For development, the default API key is: `dev-write-key-change-in-production`
 ### Core Tables
 - **providers**: GitHub Actions repository configuration
 - **builds**: Workflow run information with status tracking
-- **alerts**: Alert history and delivery status
-- **settings**: Application configuration, SMTP settings, and API keys
+- **alerts**: Alert history and delivery status (prevents duplicate alerts)
+- **settings**: Application configuration and API keys
 
 ### Indexes
 - `idx_builds_status_started`: Performance for status queries
@@ -96,6 +107,7 @@ Accepts `workflow_run` events and automatically:
 - Calculates build duration from start/end times
 - Stores raw payload for debugging and analysis
 - Supports all workflow statuses: success, failed, running, queued
+- **Triggers automatic email alerts for failed builds**
 
 ### Webhook Payload Parsing
 The system includes a comprehensive parser that extracts:
@@ -107,19 +119,64 @@ The system includes a comprehensive parser that extracts:
 
 ## Alert System
 
-### Email Alerts
-- **SMTP Support**: Configurable SMTP server settings
-- **Error Handling**: Non-blocking alerts that don't crash the pipeline
-- **Comprehensive Logging**: Detailed logging for troubleshooting
-- **Graceful Degradation**: System continues working even if alerts fail
+### Automatic Build Failure Alerts
+- **Trigger**: Any newly stored build with status 'failed' and finished_at set
+- **Debouncing**: Prevents duplicate alerts for the same build ID & channel
+- **Email Format**: Professional email with build details and failure information
+- **Non-blocking**: Alert failures don't crash the webhook processing pipeline
 
-### Configuration
-Email alerts require the following settings in the database:
-- `smtp_host`: SMTP server hostname
-- `smtp_port`: SMTP server port (typically 587 for TLS)
-- `smtp_username`: SMTP username/email
-- `smtp_password`: SMTP password or app password
-- `alert_email`: Email address to receive alerts
+### Email Configuration
+Email alerts require the following environment variables:
+- `ALERTS_ENABLED`: Set to 'true' or 'false' to enable/disable alerts
+- `SMTP_HOST`: SMTP server hostname
+- `SMTP_PORT`: SMTP server port (typically 587 for TLS)
+- `SMTP_USERNAME`: SMTP username/email
+- `SMTP_PASSWORD`: SMTP password or app password
+
+### Alert Content
+**Subject**: `[CI/CD] Build FAILED: {provider} #{external_id}`
+
+**Body**:
+```
+Build FAILED
+
+Provider: github-myorg/frontend-app
+Build ID: #123456790
+Branch: feature/new-component
+Duration: 120 seconds
+URL: https://github.com/myorg/frontend-app/actions/runs/123456790
+
+This is an automated alert from the CI/CD Health Dashboard.
+```
+
+### SMTP Configuration Examples
+
+#### Gmail
+```bash
+ALERTS_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=your-app-password  # Use App Password, not regular password
+```
+
+#### Outlook/Office 365
+```bash
+ALERTS_ENABLED=true
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=your-password
+```
+
+#### Custom SMTP Server
+```bash
+ALERTS_ENABLED=true
+SMTP_HOST=mail.company.com
+SMTP_PORT=587
+SMTP_USERNAME=alerts@company.com
+SMTP_PASSWORD=your-password
+```
 
 ## Development
 
@@ -160,40 +217,14 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
 ### Environment Configuration
 ```bash
 # Production settings
-DATABASE_URL=postgresql+asyncpg://user:pass@host:543d/cicd_dashboard
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/cicd_dashboard
 DEBUG=false
 API_WRITE_KEY=your-secure-production-key
+ALERTS_ENABLED=true
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=alerts@company.com
 SMTP_PASSWORD=app_password
-ALERT_EMAIL=alerts@company.com
-```
-
-### SMTP Configuration Examples
-
-#### Gmail
-```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=alerts@company.com
-SMTP_PASSWORD=your-app-password  # Use App Password, not regular password
-```
-
-#### Outlook/Office 365
-```bash
-SMTP_HOST=smtp-mail.outlook.com
-SMTP_PORT=587
-SMTP_USERNAME=alerts@company.com
-SMTP_PASSWORD=your-password
-```
-
-#### Custom SMTP Server
-```bash
-SMTP_HOST=mail.company.com
-SMTP_PORT=587
-SMTP_USERNAME=alerts@company.com
-SMTP_PASSWORD=your-password
 ```
 
 ## Architecture
@@ -203,8 +234,8 @@ The backend follows a clean, async-first architecture focused on GitHub Actions:
 - **Models**: SQLAlchemy ORM with proper relationships
 - **Schemas**: Pydantic validation and serialization
 - **Dependencies**: FastAPI dependency injection
-- **Alerts**: Non-blocking email notification system
-- **Webhooks**: Real-time GitHub Actions integration
+- **Alerts**: Non-blocking email notification system with debouncing
+- **Webhooks**: Real-time GitHub Actions integration with automatic alerting
 - **Providers**: GitHub Actions-specific data parsing and normalization
 
 ## Contributing

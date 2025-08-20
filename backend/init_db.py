@@ -22,10 +22,6 @@ async def create_default_settings():
             default_settings = Settings(
                 id=1,
                 alert_email="alerts@example.com",
-                smtp_host="smtp.gmail.com",
-                smtp_port=587,
-                smtp_username="alerts@example.com",
-                smtp_password="your-app-password",
                 api_write_key="dev-write-key-change-in-production"
             )
             session.add(default_settings)
@@ -74,11 +70,13 @@ async def main():
         print("\nDefault API Write Key: dev-write-key-change-in-production")
         print("Use this key in the X-API-KEY header for write operations")
         print("\nEmail Configuration:")
-        print("- SMTP Host: smtp.gmail.com")
-        print("- SMTP Port: 587")
-        print("- Username: alerts@example.com")
-        print("- Password: your-app-password (update this)")
         print("- Alert Email: alerts@example.com")
+        print("\nSMTP Configuration (from environment variables):")
+        print("- SMTP_HOST: Set in environment")
+        print("- SMTP_PORT: Set in environment (default: 587)")
+        print("- SMTP_USERNAME: Set in environment")
+        print("- SMTP_PASSWORD: Set in environment")
+        print("- ALERTS_ENABLED: Set to 'true' or 'false' in environment")
         
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")

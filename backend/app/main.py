@@ -17,7 +17,7 @@ from .schemas import (
     AlertTestRequest, AlertTestResponse, SeedRequest, SeedResponse
 )
 from .deps import get_pagination_params, verify_write_key
-from .alerts import send_alert
+from .alerts import send_alert, send_build_failure_alert
 from .providers.github_actions import GitHubActionsProvider
 
 @asynccontextmanager
@@ -299,6 +299,36 @@ async def github_webhook(
             build.started_at = parsed_data["started_at"]
             build.finished_at = parsed_data["finished_at"]
             build.raw_payload = parsed_data["raw_payload"]
+            
+            # Check if this is a newly failed build that needs alerting
+            if (build.status == "failed" and 
+                build.finished_at and 
+                not build.finished_at == build.started_at):  # Ensure it's actually finished
+                
+                # Get settings for alerting
+                settings_result = await session.execute(
+                    select(Settings).where(Settings.id == 1)
+                )
+                settings = settings_result.scalar_one_or_none()
+                
+                if settings and settings.alert_email:
+                    # Prepare build data for alert
+                    build_data = {
+                        "id": build.id,
+                        "external_id": build.external_id,
+                        "status": build.status,
+                        "branch": build.branch,
+                        "duration_seconds": build.duration_seconds,
+                        "url": build.url,
+                        "provider_name": provider.name
+                    }
+                    
+                    # Send alert (non-blocking)
+                    await send_build_failure_alert(
+                        build_data,
+                        {"alert_email": settings.alert_email},
+                        session
+                    )
         else:
             # Create new build
             build = Build(
@@ -315,8 +345,39 @@ async def github_webhook(
                 raw_payload=parsed_data["raw_payload"]
             )
             session.add(build)
+            await session.commit()
+            await session.refresh(build)
+            
+            # Check if this is a failed build that needs alerting
+            if (build.status == "failed" and 
+                build.finished_at and 
+                not build.finished_at == build.started_at):
+                
+                # Get settings for alerting
+                settings_result = await session.execute(
+                    select(Settings).where(Settings.id == 1)
+                )
+                settings = settings_result.scalar_one_or_none()
+                
+                if settings and settings.alert_email:
+                    # Prepare build data for alert
+                    build_data = {
+                        "id": build.id,
+                        "external_id": build.external_id,
+                        "status": build.status,
+                        "branch": build.branch,
+                        "duration_seconds": build.duration_seconds,
+                        "url": build.url,
+                        "provider_name": provider.name
+                    }
+                    
+                    # Send alert (non-blocking)
+                    await send_build_failure_alert(
+                        build_data,
+                        {"alert_email": settings.alert_email},
+                        session
+                    )
         
-        await session.commit()
         return {"status": "processed"}
         
     except Exception as e:
@@ -343,18 +404,30 @@ async def test_alert(
                 detail="Settings not configured"
             )
         
-        if not settings.alert_email or not all([settings.smtp_host, settings.smtp_port, settings.smtp_username, settings.smtp_password]):
+        if not settings.alert_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email configuration not complete"
+                detail="Alert email not configured"
+            )
+        
+        # Get SMTP configuration from environment
+        smtp_host = os.getenv("SMTP_HOST")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_username = os.getenv("SMTP_USERNAME")
+        smtp_password = os.getenv("SMTP_PASSWORD")
+        
+        if not all([smtp_host, smtp_username, smtp_password]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SMTP configuration incomplete"
             )
         
         # Send test email
         smtp_config = {
-            "host": settings.smtp_host,
-            "port": settings.smtp_port,
-            "username": settings.smtp_username,
-            "password": settings.smtp_password
+            "host": smtp_host,
+            "port": smtp_port,
+            "username": smtp_username,
+            "password": smtp_password
         }
         
         success = await send_alert(

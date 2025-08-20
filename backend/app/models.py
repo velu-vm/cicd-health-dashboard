@@ -8,7 +8,7 @@ class Provider(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, unique=True)
-    kind = Column(String(50), nullable=False)  # github_actions, jenkins
+    kind = Column(String(50), nullable=False)  # github_actions
     config_json = Column(JSON)  # Provider-specific configuration
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -54,10 +54,6 @@ class Settings(Base):
     
     id = Column(Integer, primary_key=True, default=1)
     alert_email = Column(String(255))  # Email for alerts
-    smtp_host = Column(String(255))  # SMTP server host
-    smtp_port = Column(Integer)  # SMTP server port
-    smtp_username = Column(String(255))  # SMTP username
-    smtp_password = Column(String(255))  # SMTP password
     api_write_key = Column(String(255))  # API key for write operations
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

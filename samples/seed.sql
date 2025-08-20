@@ -2,14 +2,10 @@
 -- This file contains sample data to populate the database for testing
 
 -- Insert default settings
-INSERT OR REPLACE INTO settings (id, alert_email, smtp_host, smtp_port, smtp_username, smtp_password, api_write_key, updated_at) 
+INSERT OR REPLACE INTO settings (id, alert_email, api_write_key, updated_at) 
 VALUES (
     1, 
     'alerts@example.com',
-    'smtp.gmail.com',
-    587,
-    'alerts@example.com',
-    'your-app-password',
     'dev-write-key-change-in-production',
     CURRENT_TIMESTAMP
 );
@@ -43,9 +39,9 @@ INSERT OR REPLACE INTO builds (id, provider_id, external_id, status, duration_se
 
 -- Insert sample alerts
 INSERT OR REPLACE INTO alerts (id, build_id, channel, sent_at, success, message) VALUES
-(1, 2, 'email', '2024-01-15 11:02:30', true, 'Build failed for frontend-app on branch feature/new-component. Commit: def456ghi789abcdef123456789abcdef123456'),
-(2, 8, 'email', '2024-01-15 15:10:30', true, 'Build failed for mobile-app on branch feature/push-notifications. Build failed after 10 minutes.'),
-(3, 4, 'email', '2024-01-15 09:05:30', true, 'Backend API build succeeded on main branch. Build completed in 5 minutes.'),
+(1, 2, 'email', '2024-01-15 11:02:30', true, 'Build failure alert sent to alerts@example.com'),
+(2, 8, 'email', '2024-01-15 15:10:30', true, 'Build failure alert sent to alerts@example.com'),
+(3, 3, 'email', '2024-01-15 09:05:30', true, 'Backend API build succeeded on main branch. Build completed in 5 minutes.'),
 (4, 1, 'email', '2024-01-15 10:33:30', true, 'Frontend app build succeeded on main branch. Build completed in 3 minutes.'),
 (5, 7, 'email', '2024-01-15 08:07:30', true, 'Mobile app build succeeded on main branch. Build completed in 7 minutes.'),
 (6, 9, 'email', '2024-01-15 07:15:30', true, 'Infrastructure build succeeded on main branch. Build completed in 15 minutes.');
