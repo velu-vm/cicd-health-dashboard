@@ -73,13 +73,13 @@ jobs:
       - name: Check Docker secrets
         id: check-secrets
         run: |
-          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
+          if [ -n "${{ secrets.DOCKERUSERNAME }}" ] && [ -n "${{ secrets.DOCKERPASSWORD }}" ]; then
             echo "docker_configured=true" >> $GITHUB_OUTPUT
             echo "✅ Docker secrets configured, proceeding with build"
           else
             echo "docker_configured=false" >> $GITHUB_OUTPUT
             echo "⚠️ Docker secrets not configured, skipping Docker build"
-            echo "To enable Docker builds, add DOCKER_USERNAME and DOCKER_PASSWORD secrets"
+            echo "To enable Docker builds, add DOCKERUSERNAME and DOCKERPASSWORD secrets"
           fi
       
       - name: Set up Docker Buildx
@@ -90,8 +90,8 @@ jobs:
         if: steps.check-secrets.outputs.docker_configured == 'true'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKERUSERNAME }}
+          password: ${{ secrets.DOCKERPASSWORD }}
       
       - name: Build and push Docker image
         if: steps.check-secrets.outputs.docker_configured == 'true'
@@ -100,8 +100,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/cicd-dashboard:latest
-            ${{ secrets.DOCKER_USERNAME }}/cicd-dashboard:${{ github.sha }}
+            ${{ secrets.DOCKERUSERNAME }}/cicd-dashboard:latest
+            ${{ secrets.DOCKERUSERNAME }}/cicd-dashboard:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -109,7 +109,7 @@ jobs:
         if: steps.check-secrets.outputs.docker_configured == 'false'
         run: |
           echo "🚫 Docker build skipped - secrets not configured"
-          echo "Add DOCKER_USERNAME and DOCKER_PASSWORD secrets to enable Docker builds"
+          echo "Add DOCKERUSERNAME and DOCKERPASSWORD secrets to enable Docker builds"
       
       - name: Notify Dashboard - Build Success
         if: success()
@@ -169,13 +169,13 @@ jobs:
       
       - name: Deploy to production
         run: |
-          if [ -n "${{ secrets.DOCKER_USERNAME }}" ]; then
+          if [ -n "${{ secrets.DOCKERUSERNAME }}" ]; then
             echo "Deploying Docker image to production..."
-            echo "Image: ${{ secrets.DOCKER_USERNAME }}/cicd-dashboard:latest"
+            echo "Image: ${{ secrets.DOCKERUSERNAME }}/cicd-dashboard:latest"
             echo "✅ Deployment completed successfully"
           else
             echo "⚠️ Docker secrets not configured, skipping deployment"
-            echo "To enable deployment, add DOCKER_USERNAME and DOCKER_PASSWORD secrets"
+            echo "To enable deployment, add DOCKERUSERNAME and DOCKERPASSWORD secrets"
           fi
           sleep 5
       

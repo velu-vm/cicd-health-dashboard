@@ -8,18 +8,100 @@ Your CI/CD pipeline now includes Docker image building and pushing to Docker Hub
 
 You need to add these secrets to your GitHub repository:
 
-### 1. **DOCKER_USERNAME**
+### 1. **DOCKERUSERNAME**
 - **What**: Your Docker Hub username
 - **Where**: Go to [GitHub Repository Settings](https://github.com/velu-vm/cicd-health-dashboard/settings/secrets/actions) → Secrets and variables → Actions
 - **Example**: `velmurugan` (if your Docker Hub username is velmurugan)
 
-### 2. **DOCKER_PASSWORD**
+### 2. **DOCKERPASSWORD**
 - **What**: Your Docker Hub access token (NOT your login password)
 - **How to get it**:
   1. Go to [Docker Hub](https://hub.docker.com/settings/security)
   2. Click "New Access Token"
   3. Name it "CI/CD Dashboard"
   4. Copy the generated token
+
+### 3. **Update Your .env File**
+Replace `Arvish@09` with the actual app password:
+
+```bash
+# Current setting (needs to be updated)
+SMTP_PASSWORD=Arvish@09
+
+# Should become (example)
+SMTP_PASSWORD=abcd efgh ijkl mnop
+```
+
+## 🔧 **Manual Update Command**
+```bash
+sed 's/SMTP_PASSWORD=Arvish@09/SMTP_PASSWORD=YOUR_ACTUAL_APP_PASSWORD/' .env > .env.new && mv .env.new .env
+```
+
+## 📋 **Current Email Configuration**
+```env
+ALERTS_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USERNAME=renugavelmurugan09@gmail.com
+SMTP_PASSWORD=Arvish@09  # ⚠️ UPDATE THIS with App Password!
+SMTP_FROM_EMAIL=renugavelmurugan09@gmail.com
+SMTP_FROM_NAME=CI/CD Dashboard - renugavelmurugan09@gmail.com
+```
+
+## 🧪 **Test Email Notifications**
+
+Once you've updated the app password, test the email functionality:
+
+```bash
+# Test alert endpoint
+curl -X POST http://localhost:8000/api/alert/test \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer d447e5b2466828ddda9eed4da0597577" \
+  -d '{"message": "Test email notification from CI/CD Dashboard"}'
+```
+
+## 📬 **What You'll Receive**
+
+- **Build Failure Alerts**: When any CI/CD pipeline fails
+- **Test Notifications**: When you manually test the alert system
+- **Pipeline Status Updates**: Important pipeline events
+
+## 🚨 **Troubleshooting**
+
+### **Email Not Sending?**
+1. Check if `ALERTS_ENABLED=true`
+2. Verify Gmail app password is correct
+3. Ensure 2FA is enabled on Gmail
+4. Check backend logs for SMTP errors
+
+### **Gmail Security Issues?**
+- Gmail blocks regular passwords for SMTP - use App Passwords instead
+- Check Gmail spam folder for test emails
+- Verify sender email matches your Gmail account
+
+## 🔄 **Restart Required**
+
+After updating the `.env` file, restart your backend server:
+
+```bash
+# Stop current server
+pkill -f "python run_server.py"
+
+# Start with new config
+python run_server.py &
+```
+
+## ✅ **Next Steps**
+
+1. **Generate Gmail App Password** (see step 2 above)
+2. **Update SMTP_PASSWORD** in `.env` file with the app password
+3. **Restart backend server**
+4. **Test email notifications**
+5. **Trigger a failed build** to see failure alerts
+
+---
+
+**🎉 Your dashboard will now send real-time email notifications for all CI/CD pipeline failures!**
 
 ## 🚀 **CI/CD Pipeline Flow**
 
@@ -69,10 +151,10 @@ You need to add these secrets to your GitHub repository:
 2. Settings → Secrets and variables → Actions
 3. Click "New repository secret"
 4. Add:
-   - **Name**: `DOCKER_USERNAME`
+   - **Name**: `DOCKERUSERNAME`
    - **Value**: Your Docker Hub username
 5. Add another:
-   - **Name**: `DOCKER_PASSWORD`
+   - **Name**: `DOCKERPASSWORD`
    - **Value**: Your Docker Hub access token
 
 ### **Step 4: Test the Pipeline**
