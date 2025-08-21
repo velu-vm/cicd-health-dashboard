@@ -1,15 +1,10 @@
 // CI/CD Health Dashboard JavaScript
-const API_BASE = 'http://localhost:8000';
+const API_BASE = ''; // Use relative paths since frontend is served from backend
+
+console.log('🚀 Dashboard JavaScript loaded');
 
 // DOM elements
-const loadingState = document.getElementById('loadingState');
-const errorState = document.getElementById('errorState');
-const dashboardContent = document.getElementById('dashboardContent');
-const refreshBtn = document.getElementById('refreshBtn');
-const refreshBuildsBtn = document.getElementById('refreshBuildsBtn');
-const statusFilter = document.getElementById('statusFilter');
-const testAlertBtn = document.getElementById('testAlertBtn');
-const lastUpdated = document.getElementById('lastUpdated');
+let loadingState, errorState, dashboardContent, refreshBtn, refreshBuildsBtn, statusFilter, testAlertBtn, lastUpdated;
 
 // Dashboard state
 let currentBuilds = [];
@@ -19,7 +14,33 @@ let autoRefreshInterval = null;
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard initialized, loading data...');
-    loadDashboard();
+    
+    // Get DOM elements
+    loadingState = document.getElementById('loadingState');
+    errorState = document.getElementById('errorState');
+    dashboardContent = document.getElementById('dashboardContent');
+    refreshBtn = document.getElementById('refreshBtn');
+    refreshBuildsBtn = document.getElementById('refreshBuildsBtn');
+    statusFilter = document.getElementById('statusFilter');
+    testAlertBtn = document.getElementById('testAlertBtn');
+    lastUpdated = document.getElementById('lastUpdated');
+    
+    // Check if all elements exist
+    if (!loadingState || !errorState || !dashboardContent || !refreshBtn || !refreshBuildsBtn || !statusFilter || !testAlertBtn || !lastUpdated) {
+        console.error('❌ Missing required DOM elements:', {
+            loadingState: !!loadingState,
+            errorState: !!errorState,
+            dashboardContent: !!dashboardContent,
+            refreshBtn: !!refreshBtn,
+            refreshBuildsBtn: !!refreshBuildsBtn,
+            statusFilter: !!statusFilter,
+            testAlertBtn: !!testAlertBtn,
+            lastUpdated: !!lastUpdated
+        });
+        return;
+    }
+    
+    console.log('✅ All DOM elements found');
     
     // Add event listeners
     refreshBtn.addEventListener('click', loadDashboard);
@@ -29,6 +50,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Start auto-refresh
     startAutoRefresh();
+    
+    // Load dashboard data
+    loadDashboard();
 });
 
 // Main function to load dashboard data

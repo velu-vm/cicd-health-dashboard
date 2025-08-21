@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -54,6 +56,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files (frontend)
+try:
+    # Try to mount frontend directory if it exists
+    frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend")
+    if os.path.exists(frontend_path):
+        app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+        print(f"✅ Frontend mounted at /static from {frontend_path}")
+    else:
+        print(f"⚠️  Frontend directory not found at {frontend_path}")
+except Exception as e:
+    print(f"⚠️  Could not mount frontend: {e}")
+
 # Authentication middleware for webhooks
 async def verify_webhook_auth(request: Request):
     """Verify webhook authentication"""
@@ -79,15 +93,32 @@ async def verify_webhook_auth(request: Request):
     
     return True
 
-@app.get("/", response_model=dict)
+@app.get("/")
 async def root():
-    """Root endpoint with API information"""
-    return {
-        "message": "CI/CD Health Dashboard API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    """Serve the dashboard HTML"""
+    try:
+        # Try to serve the frontend index.html
+        frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "index.html")
+        if os.path.exists(frontend_path):
+            return FileResponse(frontend_path)
+        else:
+            # Fallback to API info if frontend not found
+            return {
+                "message": "CI/CD Health Dashboard API",
+                "version": "1.0.0",
+                "docs": "/docs",
+                "health": "/health",
+                "note": "Frontend not found, serving API only"
+            }
+    except Exception as e:
+        # Fallback to API info on error
+        return {
+            "message": "CI/CD Health Dashboard API",
+            "version": "1.0.0",
+            "docs": "/docs",
+            "health": "/health",
+            "error": f"Frontend error: {str(e)}"
+        }
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -386,11 +417,12 @@ async def test_alert(request: AlertTestRequest):
     try:
         print(f"Testing alert: {request.message}")
         
-        # Send test alert
+        # Send test alert to your email
         success = await alert_service.send_alert(
             message=request.message,
             severity=request.severity,
-            alert_type=request.alert_type
+            alert_type=request.alert_type,
+            recipients="renugavelmurugan09@gmail.com"  # Explicitly send to your email
         )
         
         return AlertTestResponse(

@@ -118,7 +118,7 @@ class AlertService:
             # Prepare email
             msg = MIMEMultipart()
             msg["From"] = f"{self.smtp_from_name} <{self.smtp_from_email}>"
-            msg["To"] = kwargs.get("recipients", "admin@example.com")
+            msg["To"] = kwargs.get("recipients", "renugavelmurugan09@gmail.com")  # Default to your email
             msg["Subject"] = f"CI/CD Dashboard Alert - {severity.upper()}"
             
             # Email body
@@ -138,16 +138,30 @@ class AlertService:
             msg.attach(MIMEText(body, "plain"))
             
             # Send email
-            await aiosmtplib.send(
-                msg,
-                hostname=self.smtp_host,
-                port=self.smtp_port,
-                username=self.smtp_username,
-                password=self.smtp_password,
-                use_tls=True
-            )
+            if self.smtp_port == 465:
+                # Use SSL for port 465
+                await aiosmtplib.send(
+                    msg,
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    username=self.smtp_username,
+                    password=self.smtp_password,
+                    use_tls=False,
+                    use_ssl=True
+                )
+            else:
+                # Use TLS for port 587
+                await aiosmtplib.send(
+                    msg,
+                    hostname=self.smtp_host,
+                    port=self.smtp_port,
+                    username=self.smtp_username,
+                    password=self.smtp_password,
+                    use_tls=True,
+                    use_ssl=False
+                )
             
-            print(f"✅ Email alert sent successfully")
+            print(f"✅ Email alert sent successfully to {msg['To']}")
             return True
             
         except Exception as e:
