@@ -116,16 +116,7 @@ class GitHubWebhookPayload(BaseModel):
     updated_at: datetime
     conclusion: Optional[str] = None
 
-class JenkinsWebhookPayload(BaseModel):
-    build_status: str
-    job_name: str
-    build_number: int
-    git_branch: Optional[str] = None
-    git_commit: Optional[str] = None
-    triggered_by: Optional[str] = None
-    build_url: str
-    timestamp: datetime
-    duration: Optional[float] = None
+
 
 # Alert Models
 class AlertTestRequest(BaseModel):

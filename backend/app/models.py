@@ -6,12 +6,12 @@ from datetime import datetime
 from .db import Base
 
 class Provider(Base):
-    """CI/CD tool provider (GitHub Actions, Jenkins, etc.)"""
+    """CI/CD tool provider (GitHub Actions, etc.)"""
     __tablename__ = "providers"
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
-    kind = Column(String, nullable=False)  # github_actions, jenkins, gitlab, etc.
+    kind = Column(String, nullable=False)  # github_actions, gitlab, etc.
     config_json = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -44,7 +44,6 @@ class Build(Base):
     # Raw data and metadata
     raw_payload = Column(JSON, nullable=True)  # Original webhook payload
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class Alert(Base):
     """Alert configuration and history"""

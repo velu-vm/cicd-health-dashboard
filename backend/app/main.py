@@ -16,7 +16,7 @@ from .db import init_db, get_db
 from .models import Provider, Build, Alert, Settings, Metrics
 from .schemas import (
     MetricsSummary, BuildListResponse, Build as BuildSchema,
-    GitHubWebhookPayload, JenkinsWebhookPayload,
+    GitHubWebhookPayload,
     AlertTestRequest, AlertTestResponse, SeedRequest, SeedResponse,
     HealthResponse
 )
@@ -29,6 +29,7 @@ RATE_LIMIT_MAX_REQUESTS = 60
 
 # Security configuration
 WRITE_KEY = os.getenv("WRITE_KEY", "default-key-change-in-production")
+print(f"🔑 Webhook authentication key: {WRITE_KEY}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CI/CD Health Dashboard API",
-    description="API for monitoring CI/CD pipeline health using GitHub Actions and Jenkins",
+    description="API for monitoring CI/CD pipeline health using GitHub Actions",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -72,6 +73,9 @@ except Exception as e:
 async def verify_webhook_auth(request: Request):
     """Verify webhook authentication"""
     auth_header = request.headers.get("Authorization")
+    print(f"🔍 Auth header: {auth_header}")
+    print(f"🔑 Expected key: {WRITE_KEY}")
+    
     if not auth_header:
         raise HTTPException(
             status_code=401,
@@ -85,12 +89,16 @@ async def verify_webhook_auth(request: Request):
         )
     
     token = auth_header.split(" ")[1]
+    print(f"🔑 Received token: {token}")
+    
     if token != WRITE_KEY:
+        print(f"❌ Token mismatch! Expected: {WRITE_KEY}, Got: {token}")
         raise HTTPException(
             status_code=403,
             detail="Invalid authorization token"
         )
     
+    print("✅ Authentication successful")
     return True
 
 @app.get("/")
@@ -219,7 +227,7 @@ async def get_builds(
                 "started_at": build.started_at,
                 "finished_at": build.finished_at,
                 "duration_seconds": build.duration_seconds,
-                "provider_name": "GitHub Actions" if build.provider_id == 1 else "Jenkins" if build.provider_id == 2 else "Unknown"
+                "provider_name": "GitHub Actions"
             }
             build_list.append(build_data)
         
@@ -256,7 +264,7 @@ async def get_build(build_id: int, session: AsyncSession = Depends(get_db)):
             "started_at": build.started_at,
             "finished_at": build.finished_at,
             "duration_seconds": build.duration_seconds,
-            "provider_name": "GitHub Actions" if build.provider_id == 1 else "Jenkins" if build.provider_id == 2 else "Unknown"
+            "provider_name": "GitHub Actions"
         }
         
     except HTTPException:
@@ -292,7 +300,7 @@ async def github_webhook(
             triggered_by = sender.get('login', 'unknown')
             url = workflow_run.get('html_url', '')
             started_at = workflow_run.get('run_started_at')
-            finished_at = workflow_run.get('updated_at')
+            finished_at = workflow_run.get('conclusion', 'running') == 'running' and None or workflow_run.get('updated_at')
             
         else:
             # Custom webhook format
@@ -303,7 +311,7 @@ async def github_webhook(
             triggered_by = payload.get('actor', {}).get('login', 'unknown')
             url = payload.get('html_url', '')
             started_at = payload.get('run_started_at')
-            finished_at = payload.get('updated_at')
+            finished_at = payload.get('conclusion', 'running') == 'running' and None or payload.get('updated_at')
         
         # Parse dates if they're strings
         if isinstance(started_at, str):
@@ -350,66 +358,7 @@ async def github_webhook(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to process webhook: {str(e)}")
 
-@app.post("/api/webhook/jenkins")
-async def jenkins_webhook(
-    request: Request,
-    session: AsyncSession = Depends(get_db)
-):
-    """Handle Jenkins webhook"""
-    # Verify authentication
-    await verify_webhook_auth(request)
-    
-    try:
-        payload = await request.json()
-        print(f"Received Jenkins webhook: {payload}")
-        
-        # Extract data from payload
-        build_status = payload.get('build_status', 'unknown')
-        job_name = payload.get('job_name', 'unknown')
-        build_number = payload.get('build_number', 'unknown')
-        git_branch = payload.get('git_branch', 'main')
-        git_commit = payload.get('git_commit', 'unknown')
-        triggered_by = payload.get('triggered_by', 'Jenkins')
-        build_url = payload.get('build_url', '')
-        timestamp = payload.get('timestamp')
-        duration = payload.get('duration')
-        
-        # Parse timestamp if it's a string
-        if isinstance(timestamp, str):
-            from datetime import datetime
-            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        
-        # Create or update build record
-        build = Build(
-            external_id=str(build_number),
-            status=build_status.lower(),
-            branch=git_branch,
-            commit_sha=git_commit,
-            triggered_by=triggered_by,
-            url=build_url,
-            started_at=timestamp,
-            finished_at=timestamp,
-            duration_seconds=duration,
-            provider_id=2,  # Jenkins
-            raw_payload=payload
-        )
-        
-        session.add(build)
-        await session.commit()
-        
-        print(f"✅ Jenkins build {build_number} processed successfully")
-        
-        # Send alert if build failed
-        if build_status.lower() == "failed":
-            await alert_service.send_build_failure_alert(build, "Jenkins")
-        
-        return {"message": "Webhook processed successfully", "build_id": build.id}
-        
-    except Exception as e:
-        print(f"Error processing Jenkins webhook: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to process webhook: {str(e)}")
+
 
 @app.post("/api/alert/test", response_model=AlertTestResponse)
 async def test_alert(request: AlertTestRequest):
@@ -456,15 +405,9 @@ async def seed_database(session: AsyncSession = Depends(get_db)):
                 config_json={"webhook_url": "https://api.github.com"},
                 is_active=True
             )
-            jenkins_provider = Provider(
-                name="Jenkins",
-                kind="jenkins",
-                config_json={"jenkins_url": "http://jenkins:8080"},
-                is_active=True
-            )
-            session.add_all([github_provider, jenkins_provider])
+            session.add(github_provider)
             await session.commit()
-            print("✅ Providers created")
+            print("✅ GitHub Actions provider created")
         
         # Create sample builds
         builds_query = select(Build)
@@ -489,12 +432,12 @@ async def seed_database(session: AsyncSession = Depends(get_db)):
                     status="failed",
                     branch="feature/new-feature",
                     commit_sha="def456abc789",
-                    triggered_by="jenkins",
-                    url="http://jenkins:8080/job/example/987654321",
+                    triggered_by="github-actions",
+                    url="https://github.com/example/repo/actions/runs/987654321",
                     started_at=now - timedelta(hours=4),
                     finished_at=now - timedelta(hours=3, minutes=30),
                     duration_seconds=1800,
-                    provider_id=2
+                    provider_id=1
                 ),
                 Build(
                     external_id="555666777",
@@ -517,7 +460,7 @@ async def seed_database(session: AsyncSession = Depends(get_db)):
             success=True,
             message="Database seeded successfully",
             builds_created=3,
-            providers_created=2
+            providers_created=1
         )
         
     except Exception as e:

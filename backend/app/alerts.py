@@ -24,6 +24,14 @@ class AlertService:
         self.smtp_password = os.getenv("SMTP_PASSWORD")
         self.smtp_from_email = os.getenv("SMTP_FROM_EMAIL", "noreply@example.com")
         self.smtp_from_name = os.getenv("SMTP_FROM_NAME", "CI/CD Dashboard")
+        
+        # Debug output
+        print(f"🔍 AlertService initialized with:")
+        print(f"   SMTP_HOST: {self.smtp_host}")
+        print(f"   SMTP_PORT: {self.smtp_port}")
+        print(f"   SMTP_USERNAME: {self.smtp_username}")
+        print(f"   SMTP_PASSWORD: {'[SET]' if self.smtp_password else '[NOT SET]'}")
+        print(f"   ALERTS_ENABLED: {self.alerts_enabled}")
     
     async def send_alert(
         self,

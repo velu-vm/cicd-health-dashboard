@@ -8,7 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data.db")
+# Get the directory where this file is located
+APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{os.path.join(APP_DIR, 'data.db')}")
 
 # Create async engine
 async_engine = create_async_engine(
