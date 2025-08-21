@@ -25,6 +25,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug Email Configuration
+        run: |
+          echo "🔍 Debugging Email Configuration..."
+          echo "SMTP_HOST: ${{ secrets.SMTP_HOST }}"
+          echo "SMTP_PORT: ${{ secrets.SMTP_PORT }}"
+          echo "SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}"
+          echo "SMTP_PASSWORD: [HIDDEN]"
+          echo "ALERTS_ENABLED: true"
+          echo "ALERT_DEFAULT_RECIPIENT: ${{ secrets.ALERT_DEFAULT_RECIPIENT }}"
+          echo "ALERT_TEST_RECIPIENT: ${{ secrets.ALERT_TEST_RECIPIENT }}"
+          echo "DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL }}"
+          echo "DASHBOARD_WRITE_KEY: ${{ secrets.DASHBOARD_WRITE_KEY }}"
+      
       - name: Checkout code
         uses: actions/checkout@v4
       
@@ -78,6 +91,30 @@ jobs:
                 "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
                 "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
                 "conclusion": null
+              }'
+          else
+            echo "Dashboard webhook not configured, skipping notification"
+          fi
+      
+      - name: Notify Dashboard - Test Failure
+        if: failure()
+        run: |
+          if [ -n "$DASHBOARD_WEBHOOK_URL" ] && [ -n "$DASHBOARD_WRITE_KEY" ]; then
+            echo "Notifying dashboard about test failure..."
+            curl -X POST "$DASHBOARD_WEBHOOK_URL/api/webhook/github-actions" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $DASHBOARD_WRITE_KEY" \
+              -d '{
+                "action": "completed",
+                "run_id": "${{ github.run_id }}",
+                "repository": {"full_name": "${{ github.repository }}"},
+                "head_branch": "${{ github.head_ref || github.ref_name }}",
+                "head_sha": "${{ github.sha }}",
+                "actor": {"login": "${{ github.actor }}"},
+                "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+                "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+                "conclusion": "failure"
               }'
           else
             echo "Dashboard webhook not configured, skipping notification"
