@@ -52,7 +52,12 @@ jobs:
         run: |
           cd backend
           echo "Running failing test to verify email notifications..."
-          python -m pytest tests/test_fail.py -v --tb=short || true
+          python -m pytest tests/test_fail.py -v --tb=short
+      
+      - name: Force failure to test email alerts
+        run: |
+          echo "This step will fail to test email notifications..."
+          exit 1
       
       - name: Notify Dashboard - Test Started
         if: always()
