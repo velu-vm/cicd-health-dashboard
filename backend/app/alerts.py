@@ -59,17 +59,26 @@ class AlertService:
     
     async def send_build_failure_alert(self, build, provider_name: str) -> bool:
         """Send specific alert for build failures"""
+        print(f"🔍 send_build_failure_alert called for build {build.external_id}")
+        print(f"🔍 Build status: {build.status}")
+        print(f"🔍 Provider: {provider_name}")
+        
         message = f"🚨 Build #{build.external_id} failed on {provider_name}\n"
         message += f"Branch: {build.branch}\n"
         message += f"Triggered by: {build.triggered_by}\n"
         message += f"Duration: {build.duration_seconds}s\n"
         message += f"URL: {build.url}"
         
-        return await self.send_alert(
+        print(f"📝 Alert message: {message}")
+        
+        result = await self.send_alert(
             message=message,
             severity="error",
             alert_type="email"
         )
+        
+        print(f"📧 send_alert result: {result}")
+        return result
     
     async def _send_slack_alert(self, message: str, severity: str, **kwargs) -> bool:
         """Send alert to Slack"""
@@ -118,6 +127,9 @@ class AlertService:
     
     async def _send_email_alert(self, message: str, severity: str, **kwargs) -> bool:
         """Send alert via email"""
+        print(f"🔍 _send_email_alert called with kwargs: {kwargs}")
+        print(f"🔍 SMTP config - host: {self.smtp_host}, username: {self.smtp_username}, password: {'[SET]' if self.smtp_password else '[NOT SET]'}")
+        
         if not all([self.smtp_host, self.smtp_username, self.smtp_password]):
             print("⚠️  SMTP configuration incomplete")
             return False
@@ -125,6 +137,8 @@ class AlertService:
         try:
             # Get recipient from kwargs or use environment variable
             recipient = kwargs.get("recipients") or os.getenv("ALERT_DEFAULT_RECIPIENT", "renugavelmurugan09@gmail.com")
+            print(f"🔍 Using recipient: {recipient}")
+            print(f"🔍 ALERT_DEFAULT_RECIPIENT env var: {os.getenv('ALERT_DEFAULT_RECIPIENT')}")
             
             # Prepare email
             msg = MIMEMultipart()

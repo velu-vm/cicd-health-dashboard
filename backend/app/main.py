@@ -348,7 +348,16 @@ async def github_webhook(
         
         # Send alert if build failed
         if status == "failure":
-            await alert_service.send_build_failure_alert(build, "GitHub Actions")
+            print(f"🚨 Build failed! Sending alert for build {external_id}")
+            try:
+                alert_result = await alert_service.send_build_failure_alert(build, "GitHub Actions")
+                print(f"📧 Alert result: {alert_result}")
+            except Exception as e:
+                print(f"❌ Failed to send alert: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"ℹ️  Build status: {status} - no alert needed")
         
         return {"message": "Webhook processed successfully", "build_id": build.id}
         
