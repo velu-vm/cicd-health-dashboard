@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements and install Python dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.docker.txt .
+RUN pip install --no-cache-dir -r requirements.docker.txt
 
 # Copy backend code
 COPY backend/ ./backend/
@@ -39,15 +39,15 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Copy frontend files
 COPY frontend/ /usr/share/nginx/html/
 
-# Copy backend from backend stage
-COPY --from=backend /app /app
-
-# Install Python runtime for backend
+# Install Python runtime for backend first
 RUN apk add --no-cache python3 py3-pip curl
 
 # Copy backend requirements and install Python dependencies
-COPY backend/requirements.txt /app/
-RUN pip3 install --no-cache-dir -r /app/requirements.txt
+COPY backend/requirements.docker.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy backend from backend stage
+COPY --from=backend /app /app
 
 # Create startup script
 RUN echo '#!/bin/sh' > /start.sh && \
