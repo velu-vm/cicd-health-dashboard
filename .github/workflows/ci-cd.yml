@@ -30,7 +30,7 @@ jobs:
           pip install -r requirements.txt
           echo "Dependencies installed successfully"
           echo "Installed packages:"
-          pip list | grep -E "(aiohttp|fastapi|uvicorn|sqlalchemy|aiosmtplib)"
+          pip list
       
       - name: Run simple tests
         run: |
