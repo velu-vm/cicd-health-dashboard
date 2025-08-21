@@ -1,5 +1,5 @@
 # Multi-stage build for CI/CD Health Dashboard
-FROM python:3.11-slim as backend
+FROM python:3.11-slim AS backend
 
 # Set working directory
 WORKDIR /app
@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
+# Copy backend requirements and install Python dependencies
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
@@ -31,7 +31,7 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # Production stage with Nginx
-FROM nginx:alpine as production
+FROM nginx:alpine AS production
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
@@ -45,8 +45,8 @@ COPY --from=backend /app /app
 # Install Python runtime for backend
 RUN apk add --no-cache python3 py3-pip curl
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt /app/
+# Copy backend requirements and install Python dependencies
+COPY backend/requirements.txt /app/
 RUN pip3 install --no-cache-dir -r /app/requirements.txt
 
 # Create startup script
