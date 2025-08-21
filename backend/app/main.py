@@ -417,17 +417,20 @@ async def test_alert(request: AlertTestRequest):
     try:
         print(f"Testing alert: {request.message}")
         
-        # Send test alert to your email
+        # Get recipient from environment variable or use default
+        recipient = os.getenv("ALERT_TEST_RECIPIENT", "renugavelmurugan09@gmail.com")
+        
+        # Send test alert to configured recipient
         success = await alert_service.send_alert(
             message=request.message,
             severity=request.severity,
             alert_type=request.alert_type,
-            recipients="renugavelmurugan09@gmail.com"  # Explicitly send to your email
+            recipients=recipient
         )
         
         return AlertTestResponse(
             success=success,
-            message="Alert test completed successfully" if success else "Alert test failed"
+            message=f"Alert test completed successfully to {recipient}" if success else "Alert test failed"
         )
         
     except Exception as e:

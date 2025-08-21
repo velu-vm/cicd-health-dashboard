@@ -93,6 +93,20 @@ jobs:
           username: ${{ secrets.DOCKERUSER }}
           password: ${{ secrets.DOCKERPASS }}
       
+      - name: Verify Docker Login
+        if: steps.check-secrets.outputs.docker_configured == 'true'
+        run: |
+          echo "🔐 Verifying Docker Hub authentication..."
+          if docker info > /dev/null 2>&1; then
+            echo "✅ Docker login successful"
+            echo "Username: ${{ secrets.DOCKERUSER }}"
+            echo "Registry: registry.hub.docker.com"
+          else
+            echo "❌ Docker login failed"
+            echo "Please check your DOCKERUSER and DOCKERPASS secrets"
+            exit 1
+          fi
+      
       - name: Build and push Docker image
         if: steps.check-secrets.outputs.docker_configured == 'true'
         uses: docker/build-push-action@v5

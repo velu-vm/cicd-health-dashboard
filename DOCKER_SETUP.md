@@ -133,6 +133,96 @@ python run_server.py &
 - **Nginx**: Reverse proxy and static file server
 - **Database**: SQLite (can be mounted as volume)
 
+## 🚨 **Troubleshooting Docker Authentication**
+
+### **Error: "401 Unauthorized" when pushing to Docker Hub**
+
+This error means the Docker credentials are either:
+1. **Not configured** in GitHub secrets
+2. **Incorrect values** in the secrets
+3. **Expired or invalid** Docker Hub access token
+
+### **Step-by-Step Fix:**
+
+#### **Step 1: Verify Docker Hub Account**
+1. Go to [Docker Hub](https://hub.docker.com)
+2. Sign in with your account
+3. Note your exact username (case-sensitive)
+
+#### **Step 2: Generate New Access Token**
+1. Go to [Docker Hub Security Settings](https://hub.docker.com/settings/security)
+2. Click "New Access Token"
+3. **Name**: `CI/CD Dashboard`
+4. **Permissions**: 
+   - ✅ `Read & Write` for repositories
+   - ✅ `Read` for organizations (if applicable)
+5. Click "Generate"
+6. **Copy the token immediately** (you won't see it again!)
+
+#### **Step 3: Update GitHub Secrets**
+1. Go to: `https://github.com/velu-vm/cicd-health-dashboard/settings/secrets/actions`
+2. **Delete existing secrets** (if any):
+   - Delete `DOCKERUSER` (if exists)
+   - Delete `DOCKERPASS` (if exists)
+3. **Add new secrets**:
+   - **Name**: `DOCKERUSER`
+   - **Value**: Your exact Docker Hub username
+4. **Add another**:
+   - **Name**: `DOCKERPASS`
+   - **Value**: The access token you just generated
+
+#### **Step 4: Test the Setup**
+1. Push any change to `main` branch
+2. Watch GitHub Actions tab
+3. Verify Docker build and push succeeds
+
+### **Common Issues & Solutions:**
+
+#### **Issue 1: "Username not found"**
+- **Cause**: Username is incorrect or doesn't exist
+- **Solution**: Double-check your Docker Hub username (case-sensitive)
+
+#### **Issue 2: "Access denied"**
+- **Cause**: Access token is invalid or expired
+- **Solution**: Generate a new access token
+
+#### **Issue 3: "Repository not found"**
+- **Cause**: Repository doesn't exist or wrong username
+- **Solution**: Verify the repository name and username
+
+#### **Issue 4: "Token expired"**
+- **Cause**: Access token has expired
+- **Solution**: Generate a new access token
+
+### **Verification Commands:**
+
+#### **Test Docker Hub Login Locally:**
+```bash
+# Test with your credentials
+docker login -u YOUR_USERNAME -p YOUR_ACCESS_TOKEN
+
+# Should show: "Login Succeeded"
+# Then logout
+docker logout
+```
+
+#### **Check Repository Access:**
+```bash
+# Verify you can see your repositories
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  "https://hub.docker.com/v2/repositories/YOUR_USERNAME/"
+```
+
+### **Security Best Practices:**
+
+1. **Never commit credentials** to your repository
+2. **Use access tokens** instead of passwords
+3. **Set appropriate permissions** (Read & Write only)
+4. **Rotate tokens regularly** (every 90 days)
+5. **Monitor token usage** in Docker Hub
+
+---
+
 ## 🔧 **Setup Steps**
 
 ### **Step 1: Create Docker Hub Account**

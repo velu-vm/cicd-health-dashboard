@@ -115,10 +115,13 @@ class AlertService:
             return False
         
         try:
+            # Get recipient from kwargs or use environment variable
+            recipient = kwargs.get("recipients") or os.getenv("ALERT_DEFAULT_RECIPIENT", "renugavelmurugan09@gmail.com")
+            
             # Prepare email
             msg = MIMEMultipart()
             msg["From"] = f"{self.smtp_from_name} <{self.smtp_from_email}>"
-            msg["To"] = kwargs.get("recipients", "renugavelmurugan09@gmail.com")  # Default to your email
+            msg["To"] = recipient
             msg["Subject"] = f"CI/CD Dashboard Alert - {severity.upper()}"
             
             # Email body
@@ -161,7 +164,7 @@ class AlertService:
                     use_ssl=False
                 )
             
-            print(f"✅ Email alert sent successfully to {msg['To']}")
+            print(f"✅ Email alert sent successfully to {recipient}")
             return True
             
         except Exception as e:
