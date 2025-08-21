@@ -151,10 +151,10 @@ python run_server.py &
 2. Settings → Secrets and variables → Actions
 3. Click "New repository secret"
 4. Add:
-   - **Name**: `DOCKERUSERNAME`
+   - **Name**: `DOCKERUSER`
    - **Value**: Your Docker Hub username
 5. Add another:
-   - **Name**: `DOCKERPASSWORD`
+   - **Name**: `DOCKERPASS`
    - **Value**: Your Docker Hub access token
 
 ### **Step 4: Test the Pipeline**
