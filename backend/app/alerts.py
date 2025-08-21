@@ -1,204 +1,141 @@
 import os
+import json
 import aiohttp
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict, Any
-from datetime import datetime
-from .models import Alert, AlertHistory, Build
-from .schemas import AlertType, AlertSeverity
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from dotenv import load_dotenv
+from typing import Optional
+import time
+
+# Load environment variables
+load_dotenv()
 
 class AlertService:
-    """Service for sending alerts via various channels"""
+    """Service for sending alerts via multiple channels"""
     
     def __init__(self):
+        self.alerts_enabled = os.getenv("ALERTS_ENABLED", "true").lower() == "true"
         self.slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
-        self.slack_channel = os.getenv("SLACK_CHANNEL", "#alerts")
-        
-        # SMTP configuration
+        self.slack_channel = os.getenv("SLACK_CHANNEL", "#general")
         self.smtp_host = os.getenv("SMTP_HOST")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_username = os.getenv("SMTP_USERNAME")
         self.smtp_password = os.getenv("SMTP_PASSWORD")
-        self.smtp_from_email = os.getenv("SMTP_FROM_EMAIL", "alerts@cicd-dashboard.com")
+        self.smtp_from_email = os.getenv("SMTP_FROM_EMAIL", "noreply@example.com")
         self.smtp_from_name = os.getenv("SMTP_FROM_NAME", "CI/CD Dashboard")
-        
-        self.alerts_enabled = os.getenv("ALERTS_ENABLED", "true").lower() == "true"
     
     async def send_alert(
         self,
-        session: AsyncSession,
-        alert_type: AlertType,
         message: str,
-        severity: AlertSeverity = AlertSeverity.INFO,
-        build: Optional[Build] = None,
-        alert_id: Optional[int] = None
+        severity: str = "info",
+        alert_type: str = "email",
+        **kwargs
     ) -> bool:
-        """Send an alert via the specified channel"""
+        """Send alert via specified channel"""
         if not self.alerts_enabled:
-            print(f"Alerts disabled, skipping: {message}")
+            print("⚠️  Alerts are disabled")
             return False
         
         try:
-            # Create alert history record
-            alert_history = AlertHistory(
-                alert_id=alert_id or 1,  # Default alert ID
-                build_id=build.id if build else None,
-                message=message,
-                severity=severity.value,
-                status="pending"
-            )
-            session.add(alert_history)
-            await session.commit()
-            
-            # Send alert based on type
-            success = False
-            error_message = None
-            
-            if alert_type == AlertType.SLACK:
-                success = await self._send_slack_alert(message, severity, build)
-            elif alert_type == AlertType.EMAIL:
-                success = await self._send_email_alert(message, severity, build)
-            elif alert_type == AlertType.WEBHOOK:
-                success = await self._send_webhook_alert(message, severity, build)
-            
-            # Update alert history
-            alert_history.status = "sent" if success else "failed"
-            if not success:
-                alert_history.error_message = error_message or "Unknown error"
-            
-            await session.commit()
-            return success
-            
+            if alert_type == "email":
+                return await self._send_email_alert(message, severity, **kwargs)
+            elif alert_type == "slack":
+                return await self._send_slack_alert(message, severity, **kwargs)
+            else:
+                print(f"⚠️  Unknown alert type: {alert_type}")
+                return False
         except Exception as e:
-            print(f"Error sending alert: {e}")
-            if 'alert_history' in locals():
-                alert_history.status = "failed"
-                alert_history.error_message = str(e)
-                await session.commit()
+            print(f"❌ Failed to send {alert_type} alert: {e}")
             return False
     
-    async def send_build_failure_alert(
-        self,
-        session: AsyncSession,
-        build: Build,
-        alert_type: AlertType = AlertType.EMAIL
-    ) -> bool:
-        """Send a build failure alert"""
-        message = f"Build #{build.external_id} failed on branch {build.branch}"
-        if build.triggered_by:
-            message += f" (triggered by {build.triggered_by})"
+    async def send_build_failure_alert(self, build, provider_name: str) -> bool:
+        """Send specific alert for build failures"""
+        message = f"🚨 Build #{build.external_id} failed on {provider_name}\n"
+        message += f"Branch: {build.branch}\n"
+        message += f"Triggered by: {build.triggered_by}\n"
+        message += f"Duration: {build.duration_seconds}s\n"
+        message += f"URL: {build.url}"
         
         return await self.send_alert(
-            session=session,
-            alert_type=alert_type,
             message=message,
-            severity=AlertSeverity.ERROR,
-            build=build
+            severity="error",
+            alert_type="email"
         )
     
-    async def _send_slack_alert(
-        self,
-        message: str,
-        severity: AlertSeverity,
-        build: Optional[Build] = None
-    ) -> bool:
+    async def _send_slack_alert(self, message: str, severity: str, **kwargs) -> bool:
         """Send alert to Slack"""
         if not self.slack_webhook_url:
-            print("Slack webhook URL not configured")
+            print("⚠️  Slack webhook URL not configured")
             return False
         
         try:
             # Prepare Slack message
             color_map = {
-                AlertSeverity.INFO: "#36a64f",
-                AlertSeverity.WARNING: "#ffa500",
-                AlertSeverity.ERROR: "#ff0000",
-                AlertSeverity.CRITICAL: "#8b0000"
+                "info": "#36a64f",
+                "warning": "#ffcc00",
+                "error": "#ff0000",
+                "critical": "#8b0000"
             }
             
-            attachments = [{
-                "color": color_map.get(severity, "#36a64f"),
-                "title": f"CI/CD Alert - {severity.value.upper()}",
-                "text": message,
-                "fields": [],
-                "footer": "CI/CD Dashboard",
-                "ts": int(datetime.now().timestamp())
-            }]
-            
-            if build:
-                attachments[0]["fields"].extend([
-                    {"title": "Build ID", "value": build.external_id, "short": True},
-                    {"title": "Branch", "value": build.branch or "N/A", "short": True},
-                    {"title": "Status", "value": build.status, "short": True}
-                ])
-                if build.url:
-                    attachments[0]["title_link"] = build.url
-            
-            payload = {
+            slack_payload = {
                 "channel": self.slack_channel,
-                "text": f"CI/CD Alert: {message}",
-                "attachments": attachments
+                "attachments": [
+                    {
+                        "color": color_map.get(severity, "#36a64f"),
+                        "title": f"CI/CD Dashboard Alert - {severity.upper()}",
+                        "text": message,
+                        "footer": "CI/CD Health Dashboard",
+                        "ts": int(time.time())
+                    }
+                ]
             }
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(self.slack_webhook_url, json=payload) as response:
+                async with session.post(
+                    self.slack_webhook_url,
+                    json=slack_payload,
+                    headers={"Content-Type": "application/json"}
+                ) as response:
                     if response.status == 200:
-                        print(f"Slack alert sent successfully: {message}")
+                        print(f"✅ Slack alert sent successfully")
                         return True
                     else:
-                        print(f"Slack alert failed with status {response.status}")
+                        print(f"❌ Slack alert failed with status: {response.status}")
                         return False
                         
         except Exception as e:
-            print(f"Error sending Slack alert: {e}")
+            print(f"❌ Failed to send Slack alert: {e}")
             return False
     
-    async def _send_email_alert(
-        self,
-        message: str,
-        severity: AlertSeverity,
-        build: Optional[Build] = None
-    ) -> bool:
+    async def _send_email_alert(self, message: str, severity: str, **kwargs) -> bool:
         """Send alert via email"""
         if not all([self.smtp_host, self.smtp_username, self.smtp_password]):
-            print("SMTP configuration incomplete")
+            print("⚠️  SMTP configuration incomplete")
             return False
         
         try:
             # Prepare email
-            subject = f"CI/CD Alert - {severity.value.upper()}"
+            msg = MIMEMultipart()
+            msg["From"] = f"{self.smtp_from_name} <{self.smtp_from_email}>"
+            msg["To"] = kwargs.get("recipients", "admin@example.com")
+            msg["Subject"] = f"CI/CD Dashboard Alert - {severity.upper()}"
             
-            # Build email body
+            # Email body
             body = f"""
-            CI/CD Dashboard Alert
+            CI/CD Health Dashboard Alert
             
-            Severity: {severity.value.upper()}
-            Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-            Message: {message}
+            Severity: {severity.upper()}
+            Time: {time.strftime('%Y-%m-%d %H:%M:%S')}
+            
+            Message:
+            {message}
+            
+            ---
+            This is an automated alert from the CI/CD Health Dashboard.
             """
             
-            if build:
-                body += f"""
-                
-                Build Details:
-                - ID: {build.external_id}
-                - Branch: {build.branch or 'N/A'}
-                - Status: {build.status}
-                - Triggered by: {build.triggered_by or 'N/A'}
-                """
-                if build.url:
-                    body += f"- URL: {build.url}"
-            
-            # Create email message
-            msg = MIMEMultipart()
-            msg['From'] = f"{self.smtp_from_name} <{self.smtp_from_email}>"
-            msg['To'] = self.smtp_username  # Send to configured email
-            msg['Subject'] = subject
-            
-            msg.attach(MIMEText(body, 'plain'))
+            msg.attach(MIMEText(body, "plain"))
             
             # Send email
             await aiosmtplib.send(
@@ -210,52 +147,12 @@ class AlertService:
                 use_tls=True
             )
             
-            print(f"Email alert sent successfully: {message}")
+            print(f"✅ Email alert sent successfully")
             return True
             
         except Exception as e:
-            print(f"Error sending email alert: {e}")
+            print(f"❌ Failed to send email alert: {e}")
             return False
-    
-    async def _send_webhook_alert(
-        self,
-        message: str,
-        severity: AlertSeverity,
-        build: Optional[Build] = None
-    ) -> bool:
-        """Send alert via webhook (placeholder for future implementation)"""
-        print(f"Webhook alerts not yet implemented: {message}")
-        return False
-    
-    async def test_alert(
-        self,
-        session: AsyncSession,
-        alert_type: AlertType,
-        message: str,
-        severity: AlertSeverity = AlertSeverity.INFO
-    ) -> Dict[str, Any]:
-        """Test alert delivery"""
-        try:
-            success = await self.send_alert(
-                session=session,
-                alert_type=alert_type,
-                message=message,
-                severity=severity
-            )
-            
-            return {
-                "success": success,
-                "message": f"Test alert {'sent successfully' if success else 'failed'}",
-                "alert_type": alert_type.value,
-                "severity": severity.value
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Test alert failed: {str(e)}",
-                "error": str(e)
-            }
 
-# Global alert service instance
+# Create global instance
 alert_service = AlertService()

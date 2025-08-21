@@ -1,10 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Float, ForeignKey, JSON
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 
-Base = declarative_base()
+from .db import Base
 
 class Provider(Base):
     """CI/CD tool provider (GitHub Actions, Jenkins, etc.)"""

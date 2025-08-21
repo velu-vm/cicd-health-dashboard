@@ -6,6 +6,10 @@ const loadingState = document.getElementById('loadingState');
 const errorState = document.getElementById('errorState');
 const dashboardContent = document.getElementById('dashboardContent');
 const refreshBtn = document.getElementById('refreshBtn');
+const refreshBuildsBtn = document.getElementById('refreshBuildsBtn');
+const statusFilter = document.getElementById('statusFilter');
+const testAlertBtn = document.getElementById('testAlertBtn');
+const lastUpdated = document.getElementById('lastUpdated');
 
 // Dashboard state
 let currentBuilds = [];
@@ -17,8 +21,11 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard initialized, loading data...');
     loadDashboard();
     
-    // Add refresh button event
+    // Add event listeners
     refreshBtn.addEventListener('click', loadDashboard);
+    refreshBuildsBtn.addEventListener('click', loadBuilds);
+    statusFilter.addEventListener('change', filterBuilds);
+    testAlertBtn.addEventListener('click', testAlert);
     
     // Start auto-refresh
     startAutoRefresh();
@@ -63,6 +70,20 @@ async function loadDashboard() {
         const errorMessage = error.message || 'Failed to fetch dashboard data';
         console.error('Error details:', errorMessage);
         showError(errorMessage);
+    }
+}
+
+// Load only builds data
+async function loadBuilds() {
+    try {
+        console.log('Refreshing builds...');
+        const builds = await fetchBuilds();
+        updateBuildsTable(builds.builds || []);
+        currentBuilds = builds.builds || [];
+        updateLastUpdated();
+    } catch (error) {
+        console.error('Failed to refresh builds:', error);
+        showError('Failed to refresh builds: ' + error.message);
     }
 }
 
@@ -148,7 +169,7 @@ function updateBuildsTable(builds) {
     if (!builds || builds.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="text-center" style="padding: 40px;">
+                <td colspan="7" class="text-center" style="padding: 40px;">
                     No builds available
                 </td>
             </tr>
@@ -171,6 +192,7 @@ function updateBuildsTable(builds) {
             <td>${build.branch || 'main'}</td>
             <td>${formatDuration(build.duration_seconds)}</td>
             <td>${formatRelativeTime(build.started_at)}</td>
+            <td>${build.provider_name || 'Unknown'}</td>
             <td>
                 <button class="btn btn-secondary btn-sm" onclick="viewBuildDetails(${build.id})">
                     View Details
@@ -179,6 +201,53 @@ function updateBuildsTable(builds) {
         `;
         tbody.appendChild(row);
     });
+}
+
+// Filter builds by status
+function filterBuilds() {
+    const selectedStatus = statusFilter.value;
+    console.log('Filtering builds by status:', selectedStatus);
+    
+    if (!selectedStatus) {
+        updateBuildsTable(currentBuilds);
+        return;
+    }
+    
+    const filteredBuilds = currentBuilds.filter(build => 
+        build.status.toLowerCase() === selectedStatus.toLowerCase()
+    );
+    
+    updateBuildsTable(filteredBuilds);
+}
+
+// Test alert functionality
+async function testAlert() {
+    try {
+        console.log('Testing alert...');
+        const alertData = {
+            message: "Test alert from CI/CD Dashboard",
+            severity: "info",
+            alert_type: "email"
+        };
+        
+        const response = await fetch(`${API_BASE}/api/alert/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(alertData)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`Alert test ${result.success ? 'successful' : 'failed'}: ${result.message}`);
+        } else {
+            alert('Alert test failed: ' + response.statusText);
+        }
+    } catch (error) {
+        console.error('Alert test error:', error);
+        alert('Alert test failed: ' + error.message);
+    }
 }
 
 // Format duration in human readable format
@@ -225,6 +294,49 @@ Build Details:
     } else {
         alert(`Build with ID ${buildId} not found`);
     }
+}
+
+// Show offline mode (mock data)
+function showOfflineMode() {
+    console.log('Showing offline mode with mock data');
+    
+    const mockMetrics = {
+        window_days: 7,
+        success_rate: 0.85,
+        failure_rate: 0.15,
+        avg_build_time_seconds: 180,
+        last_build_status: "success",
+        last_updated: new Date()
+    };
+    
+    const mockBuilds = [
+        {
+            id: 1,
+            external_id: "123456789",
+            status: "success",
+            branch: "main",
+            duration_seconds: 300,
+            started_at: new Date(Date.now() - 2 * 60 * 60 * 1000),
+            provider_name: "GitHub Actions"
+        },
+        {
+            id: 2,
+            external_id: "123456790",
+            status: "failed",
+            branch: "feature/new-feature",
+            duration_seconds: 120,
+            started_at: new Date(Date.now() - 4 * 60 * 60 * 1000),
+            provider_name: "Jenkins"
+        }
+    ];
+    
+    updateMetrics(mockMetrics);
+    updateBuildsTable(mockBuilds);
+    showDashboard();
+    updateLastUpdated();
+    
+    // Hide error state
+    errorState.style.display = 'none';
 }
 
 // Show/hide UI states
@@ -278,6 +390,9 @@ function stopAutoRefresh() {
 function updateLastUpdated() {
     const now = new Date();
     const timeString = now.toLocaleTimeString();
+    if (lastUpdated) {
+        lastUpdated.textContent = `Last updated: ${timeString}`;
+    }
     console.log(`Dashboard updated at: ${timeString}`);
 }
 

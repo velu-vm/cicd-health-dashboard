@@ -29,10 +29,25 @@ Base = declarative_base()
 
 async def init_db():
     """Initialize database tables"""
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    print("Database initialized successfully")
+    try:
+        print("Creating database tables...")
+        async with async_engine.begin() as conn:
+            # Create all tables
+            await conn.run_sync(Base.metadata.create_all)
+            print("✅ Database tables created successfully")
+            
+            # Verify tables were created using the connection
+            def get_table_names(connection):
+                from sqlalchemy import inspect
+                inspector = inspect(connection)
+                return inspector.get_table_names()
+            
+            tables = await conn.run_sync(get_table_names)
+            print(f"📋 Tables created: {tables}")
+            
+    except Exception as e:
+        print(f"❌ Failed to create database tables: {e}")
+        raise
 
 async def get_db():
     """Dependency to get database session"""

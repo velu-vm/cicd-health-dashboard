@@ -1,0 +1,156 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL }}
+  DASHBOARD_WRITE_KEY: ${{ secrets.DASHBOARD_WRITE_KEY }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        run: |
+          python -m pytest
+      
+      - name: Notify Dashboard - Test Started
+        if: always()
+        run: |
+          curl -X POST "$DASHBOARD_WEBHOOK_URL/api/webhook/github-actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DASHBOARD_WRITE_KEY" \
+            -d '{
+              "action": "started",
+              "run_id": "${{ github.run_id }}",
+              "repository": {"full_name": "${{ github.repository }}"},
+              "head_branch": "${{ github.head_ref || github.ref_name }}",
+              "head_sha": "${{ github.sha }}",
+              "actor": {"login": "${{ github.actor }}"},
+              "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "conclusion": null
+            }'
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build application
+        run: |
+          echo "Building application..."
+          # Add your build steps here
+          sleep 10
+      
+      - name: Notify Dashboard - Build Success
+        if: success()
+        run: |
+          curl -X POST "$DASHBOARD_WEBHOOK_URL/api/webhook/github-actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DASHBOARD_WRITE_KEY" \
+            -d '{
+              "action": "completed",
+              "run_id": "${{ github.run_id }}",
+              "repository": {"full_name": "${{ github.repository }}"},
+              "head_branch": "${{ github.ref_name }}",
+              "head_sha": "${{ github.sha }}",
+              "actor": {"login": "${{ github.actor }}"},
+              "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "conclusion": "success"
+            }'
+      
+      - name: Notify Dashboard - Build Failure
+        if: failure()
+        run: |
+          curl -X POST "$DASHBOARD_WEBHOOK_URL/api/webhook/github-actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DASHBOARD_WRITE_KEY" \
+            -d '{
+              "action": "completed",
+              "run_id": "${{ github.run_id }}",
+              "repository": {"full_name": "${{ github.repository }}"},
+              "head_branch": "${{ github.ref_name }}",
+              "head_sha": "${{ github.sha }}",
+              "actor": {"login": "${{ github.actor }}"},
+              "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "conclusion": "failure"
+            }'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production..."
+          # Add your deployment steps here
+          sleep 15
+      
+      - name: Notify Dashboard - Deploy Success
+        if: success()
+        run: |
+          curl -X POST "$DASHBOARD_WEBHOOK_URL/api/webhook/github-actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DASHBOARD_WRITE_KEY" \
+            -d '{
+              "action": "deployed",
+              "run_id": "${{ github.run_id }}",
+              "repository": {"full_name": "${{ github.repository }}"},
+              "head_branch": "${{ github.ref_name }}",
+              "head_sha": "${{ github.sha }}",
+              "actor": {"login": "${{ github.actor }}"},
+              "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "conclusion": "success"
+            }'
+      
+      - name: Notify Dashboard - Deploy Failure
+        if: failure()
+        run: |
+          curl -X POST "$DASHBOARD_WEBHOOK_URL/api/webhook/github-actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DASHBOARD_WRITE_KEY" \
+            -d '{
+              "action": "deployed",
+              "run_id": "${{ github.run_id }}",
+              "repository": {"full_name": "${{ github.repository }}"},
+              "head_branch": "${{ github.ref_name }}",
+              "head_sha": "${{ github.sha }}",
+              "actor": {"login": "${{ github.actor }}"},
+              "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+              "conclusion": "failure"
+            }'
