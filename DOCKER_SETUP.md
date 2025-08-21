@@ -1,272 +1,149 @@
-# 🐳 Docker Setup for CI/CD Health Dashboard
+# 🐳 Docker Setup Guide for CI/CD Pipeline
 
-## 🚀 Quick Start
+## 🎯 **Overview**
 
-### 1. Build and Run with Docker Compose (Recommended)
+Your CI/CD pipeline now includes Docker image building and pushing to Docker Hub. This guide will help you set up the required secrets and configuration.
 
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd cicd-health-dashboard-1
+## 🔐 **Required GitHub Secrets**
 
-# Set environment variables
-export WRITE_KEY="your-secret-key-here"
-export SLACK_WEBHOOK_URL="your-slack-webhook-url"  # Optional
-export SMTP_HOST="smtp.gmail.com"  # Optional
-export SMTP_USERNAME="your-email@gmail.com"  # Optional
-export SMTP_PASSWORD="your-app-password"  # Optional
+You need to add these secrets to your GitHub repository:
 
-# Start the dashboard
-docker-compose up -d
+### 1. **DOCKER_USERNAME**
+- **What**: Your Docker Hub username
+- **Where**: Go to [GitHub Repository Settings](https://github.com/velu-vm/cicd-health-dashboard/settings/secrets/actions) → Secrets and variables → Actions
+- **Example**: `velmurugan` (if your Docker Hub username is velmurugan)
 
-# View logs
-docker-compose logs -f
+### 2. **DOCKER_PASSWORD**
+- **What**: Your Docker Hub access token (NOT your login password)
+- **How to get it**:
+  1. Go to [Docker Hub](https://hub.docker.com/settings/security)
+  2. Click "New Access Token"
+  3. Name it "CI/CD Dashboard"
+  4. Copy the generated token
+
+## 🚀 **CI/CD Pipeline Flow**
+
+### **Test Job** ✅
+- Runs simple tests (no app dependencies)
+- Ensures code quality
+
+### **Build Job** 🐳
+- Builds Docker image from Dockerfile
+- Pushes to Docker Hub with tags:
+  - `latest` - Most recent build
+  - `{commit-sha}` - Specific commit build
+
+### **Deploy Job** 🚀
+- Deploys the built Docker image
+- Sends notifications to dashboard
+
+## 📋 **Docker Image Details**
+
+### **Image Name**:
+```
+{your-docker-username}/cicd-dashboard:latest
+{your-docker-username}/cicd-dashboard:{commit-sha}
 ```
 
-### 2. Build and Run with Docker (Manual)
+### **What's Included**:
+- **Backend**: FastAPI application with all dependencies
+- **Frontend**: Static HTML/CSS/JS files
+- **Nginx**: Reverse proxy and static file server
+- **Database**: SQLite (can be mounted as volume)
 
+## 🔧 **Setup Steps**
+
+### **Step 1: Create Docker Hub Account**
+1. Go to [Docker Hub](https://hub.docker.com)
+2. Sign up or sign in
+3. Note your username
+
+### **Step 2: Generate Access Token**
+1. Go to [Docker Hub Security Settings](https://hub.docker.com/settings/security)
+2. Click "New Access Token"
+3. Name: "CI/CD Dashboard"
+4. Copy the token (you won't see it again!)
+
+### **Step 3: Add GitHub Secrets**
+1. Go to your GitHub repository
+2. Settings → Secrets and variables → Actions
+3. Click "New repository secret"
+4. Add:
+   - **Name**: `DOCKER_USERNAME`
+   - **Value**: Your Docker Hub username
+5. Add another:
+   - **Name**: `DOCKER_PASSWORD`
+   - **Value**: Your Docker Hub access token
+
+### **Step 4: Test the Pipeline**
+1. Push any change to `main` branch
+2. Watch GitHub Actions tab
+3. Verify Docker image is built and pushed
+
+## 📊 **Expected Results**
+
+### **Successful Build**:
+```
+✅ Test Job: 13 tests passed
+✅ Build Job: Docker image built and pushed
+✅ Deploy Job: Deployment completed
+```
+
+### **Docker Hub**:
+- New image: `{username}/cicd-dashboard:latest`
+- Tagged image: `{username}/cicd-dashboard:{sha}`
+
+## 🧪 **Testing Locally**
+
+### **Pull and Run**:
 ```bash
-# Build the image
-docker build -t cicd-dashboard:latest .
+# Pull the built image
+docker pull {your-username}/cicd-dashboard:latest
 
-# Run the container
+# Run locally
 docker run -d \
   --name cicd-dashboard \
-  --restart unless-stopped \
   -p 8080:80 \
   -p 8000:8000 \
-  -e WRITE_KEY="your-secret-key-here" \
-  -e DEBUG=false \
-  cicd-dashboard:latest
-
-# Or use the deployment script
-./deploy.sh
+  {your-username}/cicd-dashboard:latest
 ```
 
-## 🌐 Access Points
-
-- **Frontend Dashboard**: http://localhost:8080
+### **Access Points**:
+- **Frontend**: http://localhost:8080
 - **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+- **API Docs**: http://localhost:8000/docs
 
-## 🔐 Security Configuration
+## 🚨 **Troubleshooting**
 
-### Environment Variables
+### **Build Fails**:
+1. Check Docker Hub credentials
+2. Verify secrets are set correctly
+3. Check Dockerfile syntax
 
-Create a `.env` file or set environment variables:
+### **Push Fails**:
+1. Verify Docker Hub access token
+2. Check repository permissions
+3. Ensure Docker Hub account is active
 
-```bash
-# Required
-WRITE_KEY=your-secret-key-here
+### **Deploy Fails**:
+1. Check if Docker image was built
+2. Verify deployment script
+3. Check target environment
 
-# Optional - Alerts
-ALERTS_ENABLED=true
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-SLACK_CHANNEL=#cicd-alerts
+## 🔄 **Next Steps**
 
-# Optional - Email Alerts
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM_EMAIL=your-email@gmail.com
-SMTP_FROM_NAME=CI/CD Dashboard
-```
+1. **Set up Docker Hub secrets** (see Step 3 above)
+2. **Push to main branch** to trigger pipeline
+3. **Monitor GitHub Actions** for build progress
+4. **Verify Docker Hub** for new images
+5. **Test deployment** with built images
 
-## 🔗 GitHub Actions Integration
+## 📚 **Resources**
 
-### 1. Add Repository Secrets
-
-In your GitHub repository, go to **Settings > Secrets and variables > Actions** and add:
-
-- `DASHBOARD_WEBHOOK_URL`: `http://your-dashboard-ip:8000/api/webhook/github-actions`
-- `DASHBOARD_WRITE_KEY`: Same as your `WRITE_KEY` environment variable
-
-### 2. Use the Provided Workflow
-
-Copy `.github/workflows/ci-cd.yml` to your repository. This workflow will:
-
-- Send webhooks when tests start
-- Send webhooks when builds complete (success/failure)
-- Send webhooks when deployments complete (success/failure)
-
-### 3. Customize the Workflow
-
-Modify the workflow to match your actual CI/CD pipeline:
-
-```yaml
-# Example: Add your actual build steps
-- name: Build application
-  run: |
-    npm install
-    npm run build
-    # Your actual build commands
-```
-
-## 🐳 Docker Commands
-
-### Management Commands
-
-```bash
-# View running containers
-docker ps
-
-# View logs
-docker logs -f cicd-dashboard
-
-# Stop container
-docker stop cicd-dashboard
-
-# Remove container
-docker rm cicd-dashboard
-
-# Restart container
-docker restart cicd-dashboard
-
-# View container details
-docker inspect cicd-dashboard
-```
-
-### Development Commands
-
-```bash
-# Run in development mode with volume mounts
-docker run -d \
-  --name cicd-dashboard-dev \
-  -p 8080:80 \
-  -p 8000:8000 \
-  -v $(pwd)/backend:/app/backend \
-  -v $(pwd)/frontend:/usr/share/nginx/html \
-  -e DEBUG=true \
-  -e WRITE_KEY="dev-key" \
-  cicd-dashboard:latest
-
-# Build with different tags
-docker build -t cicd-dashboard:v1.0.0 .
-docker build -t cicd-dashboard:latest .
-```
-
-## 🚀 Production Deployment
-
-### 1. Use Docker Compose with Production Profile
-
-```bash
-# Start with PostgreSQL
-docker-compose --profile production up -d
-
-# Use production environment file
-docker-compose --env-file env.production up -d
-```
-
-### 2. Production Considerations
-
-- **Database**: Use PostgreSQL instead of SQLite
-- **HTTPS**: Configure Nginx with SSL certificates
-- **Monitoring**: Add health checks and logging
-- **Backup**: Set up database backups
-- **Scaling**: Use Docker Swarm or Kubernetes
-
-### 3. Production Environment File
-
-```bash
-# Copy and configure production environment
-cp env.production .env
-# Edit .env with your production values
-```
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-1. **Port Already in Use**
-   ```bash
-   # Check what's using the port
-   lsof -i :8080
-   lsof -i :8000
-   
-   # Stop conflicting services
-   sudo systemctl stop nginx  # if using nginx
-   ```
-
-2. **Container Won't Start**
-   ```bash
-   # Check logs
-   docker logs cicd-dashboard
-   
-   # Check container status
-   docker ps -a
-   ```
-
-3. **Webhook Authentication Failed**
-   - Verify `WRITE_KEY` environment variable is set
-   - Check GitHub Actions secrets are configured correctly
-   - Ensure webhook URL is accessible from GitHub
-
-4. **Database Issues**
-   ```bash
-   # Check database connection
-   curl http://localhost:8000/health
-   
-   # View database logs
-   docker logs cicd-dashboard | grep -i database
-   ```
-
-### Debug Mode
-
-```bash
-# Run with debug enabled
-docker run -d \
-  --name cicd-dashboard-debug \
-  -p 8080:80 \
-  -p 8000:8000 \
-  -e DEBUG=true \
-  -e WRITE_KEY="debug-key" \
-  cicd-dashboard:latest
-
-# View detailed logs
-docker logs -f cicd-dashboard-debug
-```
-
-## 📊 Monitoring
-
-### Health Checks
-
-The dashboard includes built-in health checks:
-
-```bash
-# Check API health
-curl http://localhost:8000/health
-
-# Check container health
-docker inspect cicd-dashboard | grep Health -A 10
-```
-
-### Metrics
-
-Monitor dashboard performance:
-
-```bash
-# Get metrics summary
-curl http://localhost:8000/api/metrics/summary
-
-# Get recent builds
-curl http://localhost:8000/api/builds
-```
-
-## 🎯 Next Steps
-
-1. **Deploy the dashboard** using Docker
-2. **Configure GitHub Actions** with the provided workflow
-3. **Set up repository secrets** for authentication
-4. **Test webhooks** by pushing to your repository
-5. **Monitor real-time data** in the dashboard
-6. **Configure alerts** for build failures
-7. **Scale and optimize** for production use
-
-## 📚 Additional Resources
-
-- [Docker Documentation](https://docs.docker.com/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Nginx Documentation](https://nginx.org/en/docs/)
+- [Docker Hub Documentation](https://docs.docker.com/docker-hub/)
+- [Docker Build Action](https://github.com/docker/build-push-action)
+
+---
+
+**🎉 Once configured, every push to main will automatically build and push a new Docker image!**
