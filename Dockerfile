@@ -39,15 +39,11 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Copy frontend files
 COPY frontend/ /usr/share/nginx/html/
 
-# Install Python runtime for backend first
-RUN apk add --no-cache python3 py3-pip curl
-
-# Copy backend requirements and install Python dependencies
-COPY backend/requirements.docker.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
-
-# Copy backend from backend stage
+# Copy the complete backend environment from backend stage
 COPY --from=backend /app /app
+
+# Install only curl for health checks (Python is already available from backend stage)
+RUN apk add --no-cache curl
 
 # Create startup script
 RUN echo '#!/bin/sh' > /start.sh && \
