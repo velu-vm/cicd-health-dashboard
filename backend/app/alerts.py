@@ -149,8 +149,8 @@ class AlertService:
                     port=self.smtp_port,
                     username=self.smtp_username,
                     password=self.smtp_password,
-                    use_tls=False,
-                    use_ssl=True
+                    start_tls=False,
+                    use_tls=False
                 )
             else:
                 # Use TLS for port 587
@@ -160,8 +160,8 @@ class AlertService:
                     port=self.smtp_port,
                     username=self.smtp_username,
                     password=self.smtp_password,
-                    use_tls=True,
-                    use_ssl=False
+                    start_tls=True,
+                    use_tls=False
                 )
             
             print(f"✅ Email alert sent successfully to {recipient}")

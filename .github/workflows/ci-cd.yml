@@ -10,6 +10,16 @@ on:
 env:
   DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL }}
   DASHBOARD_WRITE_KEY: ${{ secrets.DASHBOARD_WRITE_KEY }}
+  # Email Configuration
+  SMTP_HOST: ${{ secrets.SMTP_HOST }}
+  SMTP_PORT: ${{ secrets.SMTP_PORT }}
+  SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+  SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+  SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+  SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+  ALERT_DEFAULT_RECIPIENT: ${{ secrets.ALERT_DEFAULT_RECIPIENT }}
+  ALERT_TEST_RECIPIENT: ${{ secrets.ALERT_TEST_RECIPIENT }}
+  ALERTS_ENABLED: true
 
 jobs:
   test:
@@ -37,6 +47,12 @@ jobs:
           cd backend
           echo "Running simple tests that don't require app imports..."
           python -m pytest tests/test_simple.py tests/test_basic.py -v --tb=short
+      
+      - name: Run failing test to trigger email alerts
+        run: |
+          cd backend
+          echo "Running failing test to verify email notifications..."
+          python -m pytest tests/test_fail.py -v --tb=short || true
       
       - name: Notify Dashboard - Test Started
         if: always()
