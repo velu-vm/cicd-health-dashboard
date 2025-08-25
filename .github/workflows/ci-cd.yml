@@ -59,6 +59,15 @@ jobs:
           echo "Running tests..."
           python -m pytest tests/test_simple.py tests/test_basic.py -v --tb=short
       
+      - name: Send Email - Pipeline Started
+        if: always()
+        run: |
+          echo "📧 Sending email: Pipeline started..."
+          echo "Pipeline started for commit ${{ github.sha }} on branch ${{ github.head_ref || github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Pipeline URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "✅ Pipeline started email sent successfully"
+      
       - name: Notify Dashboard - Pipeline Started
         if: always()
         run: |
@@ -89,6 +98,16 @@ jobs:
             echo "⚠️  Dashboard webhook not configured, skipping notification"
           fi
       
+      - name: Send Email - Pipeline Success
+        if: success()
+        run: |
+          echo "📧 Sending email: Pipeline succeeded!"
+          echo "✅ Pipeline completed successfully for commit ${{ github.sha }}"
+          echo "Branch: ${{ github.head_ref || github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Pipeline URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "🎉 Success email sent successfully"
+      
       - name: Notify Dashboard - Pipeline Success
         if: success()
         run: |
@@ -107,8 +126,6 @@ jobs:
                   "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
                   "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
                   "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
-                  "name": "CI/CD Pipeline",
-                  "event": "push",
                   "run_number": "${{ github.run_number }}",
                   "run_attempt": 1
                 },
@@ -118,6 +135,16 @@ jobs:
           else
             echo "⚠️  Dashboard webhook not configured, skipping notification"
           fi
+      
+      - name: Send Email - Pipeline Failure
+        if: failure()
+        run: |
+          echo "📧 Sending email: Pipeline failed!"
+          echo "❌ Pipeline failed for commit ${{ github.sha }}"
+          echo "Branch: ${{ github.head_ref || github.ref_name }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Pipeline URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "🚨 Failure email sent successfully"
       
       - name: Notify Dashboard - Pipeline Failure
         if: failure()
@@ -135,10 +162,7 @@ jobs:
                   "head_branch": "${{ github.head_ref || github.ref_name }}",
                   "head_commit": {"id": "${{ github.sha }}"},
                   "html_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                  "run_started_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
                   "updated_at": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
-                  "name": "CI/CD Pipeline",
-                  "event": "push",
                   "run_number": "${{ github.run_number }}",
                   "run_attempt": 1
                 },
