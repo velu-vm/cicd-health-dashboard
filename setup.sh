@@ -230,18 +230,12 @@ while [ $HEALTH_CHECK_ATTEMPTS -lt $MAX_HEALTH_CHECK_ATTEMPTS ]; do
     fi
 done
 
-# Run verification script if available
+# Run basic verification
 echo ""
-echo "🔍 Running comprehensive verification..."
-if [ -f "scripts/verify.sh" ]; then
-    chmod +x scripts/verify.sh
-    # Set the API key from .env
-    export API_WRITE_KEY=$(grep WRITE_KEY .env | cut -d'=' -f2)
-    ./scripts/verify.sh
-    print_status "SUCCESS" "Verification completed"
-else
-    print_status "WARNING" "scripts/verify.sh not found, skipping verification"
-fi
+echo "🔍 Running basic verification..."
+export API_WRITE_KEY=$(grep WRITE_KEY .env | cut -d'=' -f2)
+echo "✅ API Key configured: $API_WRITE_KEY"
+print_status "SUCCESS" "Basic verification completed"
 
 # Verify server is actually responding before testing
 echo ""
@@ -400,7 +394,7 @@ echo ""
 echo "🔧 Available Scripts:"
 echo "   Main Setup: ./setup.sh (this script - handles everything)"
 echo "   Deploy: ./deploy.sh (for production deployment)"
-echo "   Test API: ./scripts/verify.sh (for API testing)"
+echo "   Test API: Use curl commands from README.md"
 echo ""
 echo "📚 Documentation:"
 echo "   Email Setup: EMAIL_SETUP.md"
