@@ -393,20 +393,67 @@ function startAutoRefresh() {
         clearInterval(autoRefreshInterval);
     }
     
-    // Start new interval (refresh every 30 seconds)
+    // Start new interval (refresh every 15 seconds for better real-time updates)
     autoRefreshInterval = setInterval(() => {
-        console.log('Auto-refreshing dashboard...');
-        loadDashboard();
-    }, 30000);
+        console.log('🔄 Auto-refreshing dashboard...');
+        // Only refresh builds data, not the entire dashboard
+        refreshBuildsData();
+    }, 15000);
     
-    console.log('Auto-refresh started (30 second interval)');
+    console.log('✅ Auto-refresh started (15 second interval)');
+}
+
+// Function to refresh only builds data (faster than full dashboard reload)
+async function refreshBuildsData() {
+    try {
+        console.log('🔄 Refreshing builds data...');
+        const builds = await fetchBuilds();
+        
+        if (builds && builds.builds) {
+            // Update builds table
+            updateBuildsTable(builds.builds);
+            currentBuilds = builds.builds;
+            
+            // Update metrics if they changed significantly
+            const metrics = await fetchMetrics();
+            if (metrics && shouldUpdateMetrics(metrics)) {
+                updateMetrics(metrics);
+                currentMetrics = metrics;
+            }
+            
+            // Update timestamp
+            updateLastUpdated();
+            console.log('✅ Builds data refreshed successfully');
+        }
+    } catch (error) {
+        console.warn('⚠️  Auto-refresh failed, will retry next cycle:', error.message);
+        // Don't show error for auto-refresh failures
+    }
+}
+
+// Check if metrics have changed significantly
+function shouldUpdateMetrics(newMetrics) {
+    if (!currentMetrics) return true;
+    
+    // Check if success rate changed by more than 5%
+    const successRateDiff = Math.abs(newMetrics.success_rate - currentMetrics.success_rate);
+    if (successRateDiff > 0.05) return true;
+    
+    // Check if last build status changed
+    if (newMetrics.last_build_status !== currentMetrics.last_build_status) return true;
+    
+    // Check if average build time changed significantly
+    const timeDiff = Math.abs(newMetrics.avg_build_time_seconds - currentMetrics.avg_build_time_seconds);
+    if (timeDiff > 60) return true; // More than 1 minute difference
+    
+    return false;
 }
 
 function stopAutoRefresh() {
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
-        console.log('Auto-refresh stopped');
+        console.log('🛑 Auto-refresh stopped');
     }
 }
 

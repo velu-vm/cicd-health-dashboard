@@ -294,13 +294,37 @@ async def github_webhook(
             sender = payload.get('sender', {})
             
             external_id = str(workflow_run.get('id', 'unknown'))
-            status = workflow_run.get('conclusion', 'running')
+            # Better status handling
+            conclusion = workflow_run.get('conclusion')
+            status_raw = workflow_run.get('status')
+            
+            # Determine final status
+            if conclusion:
+                if conclusion == 'success':
+                    status = 'success'
+                elif conclusion == 'failure':
+                    status = 'failed'
+                elif conclusion == 'cancelled':
+                    status = 'failed'
+                elif conclusion == 'skipped':
+                    status = 'success'
+                else:
+                    status = 'failed'
+            elif status_raw == 'in_progress':
+                status = 'running'
+            elif status_raw == 'queued' or status_raw == 'waiting':
+                status = 'queued'
+            else:
+                status = 'running'
+            
             branch = workflow_run.get('head_branch', 'main')
             commit_sha = workflow_run.get('head_commit', {}).get('id', 'unknown')
             triggered_by = sender.get('login', 'unknown')
             url = workflow_run.get('html_url', '')
             started_at = workflow_run.get('run_started_at')
-            finished_at = workflow_run.get('conclusion', 'running') == 'running' and None or workflow_run.get('updated_at')
+            finished_at = workflow_run.get('updated_at') if conclusion else None
+            
+            print(f"🔍 Parsed workflow_run - Status: {status}, Conclusion: {conclusion}, Raw Status: {status_raw}")
             
         else:
             # Custom webhook format
@@ -311,7 +335,9 @@ async def github_webhook(
             triggered_by = payload.get('actor', {}).get('login', 'unknown')
             url = payload.get('html_url', '')
             started_at = payload.get('run_started_at')
-            finished_at = payload.get('conclusion', 'running') == 'running' and None or payload.get('updated_at')
+            finished_at = payload.get('updated_at') if payload.get('conclusion') != 'running' else None
+            
+            print(f"🔍 Parsed custom webhook - Status: {status}")
         
         # Parse dates if they're strings
         if isinstance(started_at, str):
@@ -326,34 +352,58 @@ async def github_webhook(
         if started_at and finished_at:
             duration_seconds = (finished_at - started_at).total_seconds()
         
-        # Create or update build record
-        build = Build(
-            external_id=external_id,
-            status=status,
-            branch=branch,
-            commit_sha=commit_sha,
-            triggered_by=triggered_by,
-            url=url,
-            started_at=started_at,
-            finished_at=finished_at,
-            duration_seconds=duration_seconds,
-            provider_id=1,  # GitHub Actions
-            raw_payload=payload
-        )
+        # Check if build already exists
+        existing_build_query = select(Build).where(Build.external_id == external_id)
+        existing_build_result = await session.execute(existing_build_query)
+        existing_build = existing_build_result.scalar_one_or_none()
         
-        session.add(build)
-        await session.commit()
+        if existing_build:
+            # Update existing build
+            print(f"🔄 Updating existing build {external_id} with status: {status}")
+            existing_build.status = status
+            existing_build.finished_at = finished_at
+            existing_build.duration_seconds = duration_seconds
+            existing_build.raw_payload = payload
+            await session.commit()
+            build = existing_build
+        else:
+            # Create new build record
+            print(f"🆕 Creating new build {external_id} with status: {status}")
+            build = Build(
+                external_id=external_id,
+                status=status,
+                branch=branch,
+                commit_sha=commit_sha,
+                triggered_by=triggered_by,
+                url=url,
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+                provider_id=1,  # GitHub Actions
+                raw_payload=payload
+            )
+            session.add(build)
+            await session.commit()
         
-        print(f"✅ Build {external_id} processed successfully")
+        print(f"✅ Build {external_id} processed successfully with status: {status}")
         
-        # Send alert if build failed
-        if status == "failure":
-            print(f"🚨 Build failed! Sending alert for build {external_id}")
+        # Send alerts for both success and failure
+        if status == "failed":
+            print(f"🚨 Build failed! Sending failure alert for build {external_id}")
             try:
                 alert_result = await alert_service.send_build_failure_alert(build, "GitHub Actions")
-                print(f"📧 Alert result: {alert_result}")
+                print(f"📧 Failure alert result: {alert_result}")
             except Exception as e:
-                print(f"❌ Failed to send alert: {e}")
+                print(f"❌ Failed to send failure alert: {e}")
+                import traceback
+                traceback.print_exc()
+        elif status == "success":
+            print(f"✅ Build succeeded! Sending success alert for build {external_id}")
+            try:
+                alert_result = await alert_service.send_build_success_alert(build, "GitHub Actions")
+                print(f"📧 Success alert result: {alert_result}")
+            except Exception as e:
+                print(f"❌ Failed to send success alert: {e}")
                 import traceback
                 traceback.print_exc()
         else:

@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 API_BASE="http://localhost:8000"
-API_KEY="${API_WRITE_KEY:-dev-write-key-change-in-production}"
+API_KEY="${API_WRITE_KEY:-cb77ebd3a9700a8019f0f01d1b5f7180}"
 HEALTH_ENDPOINT="$API_BASE/health"
 SEED_ENDPOINT="$API_BASE/api/seed"
 METRICS_ENDPOINT="$API_BASE/api/metrics/summary"
@@ -65,7 +65,7 @@ echo ""
 echo "1️⃣  Testing Health Check Endpoint..."
 echo "   GET $HEALTH_ENDPOINT"
 if response=$(curl -s -f "$HEALTH_ENDPOINT" 2>/dev/null); then
-    if echo "$response" | grep -q '"ok": true'; then
+    if echo "$response" | grep -q '"ok":true'; then
         print_status "PASS" "Health check endpoint is responding correctly"
         echo "   Response: $response"
     else
@@ -84,7 +84,7 @@ echo ""
 echo "2️⃣  Testing Database Seeding..."
 echo "   POST $SEED_ENDPOINT"
 if response=$(curl -s -f -H "X-API-KEY: $API_KEY" -X POST "$SEED_ENDPOINT" -d '{}' 2>/dev/null); then
-    if echo "$response" | grep -q '"success": true'; then
+    if echo "$response" | grep -q '"success":true'; then
         print_status "PASS" "Database seeding completed successfully"
         echo "   Response: $response"
     else

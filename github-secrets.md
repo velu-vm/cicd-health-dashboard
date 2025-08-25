@@ -11,7 +11,7 @@ Settings → Secrets and variables → Actions → New repository secret
 - **Note**: Use ngrok or cloudflared to expose localhost:8000
 
 ### 2. DASHBOARD_WRITE_KEY
-- **Value**: d447e5b2466828ddda9eed4da0597577
+- **Value**: cb77ebd3a9700a8019f0f01d1b5f7180
 - **Description**: Authentication token for webhook requests
 - **Note**: Must match WRITE_KEY in your dashboard .env file
 
@@ -24,6 +24,6 @@ Settings → Secrets and variables → Actions → New repository secret
 5. Test with a commit/push to trigger the workflow
 
 ## Current Configuration:
-- WRITE_KEY: d447e5b2466828ddda9eed4da0597577
-- SECRET_KEY: 2e6b09416dd5e87d2bd26390ff79f67f337ea48dac8f19897cf51ef0fe259037
-- GitHub Secret: 2812824dd4f8d2102dff7369235c3814
+- WRITE_KEY: cb77ebd3a9700a8019f0f01d1b5f7180
+- SECRET_KEY: 7734dd2064a46a83207a1a1223b9c3b5ba2cce84bc2a5bc84fa3387aae5af4a0
+- GitHub Secret: be60704b0ee185270d920ef776e1c93b

@@ -80,6 +80,29 @@ class AlertService:
         print(f"📧 send_alert result: {result}")
         return result
     
+    async def send_build_success_alert(self, build, provider_name: str) -> bool:
+        """Send specific alert for build successes"""
+        print(f"🔍 send_build_success_alert called for build {build.external_id}")
+        print(f"🔍 Build status: {build.status}")
+        print(f"🔍 Provider: {provider_name}")
+        
+        message = f"✅ Build #{build.external_id} succeeded on {provider_name}\n"
+        message += f"Branch: {build.branch}\n"
+        message += f"Triggered by: {build.triggered_by}\n"
+        message += f"Duration: {build.duration_seconds}s\n"
+        message += f"URL: {build.url}"
+        
+        print(f"📝 Success alert message: {message}")
+        
+        result = await self.send_alert(
+            message=message,
+            severity="info",
+            alert_type="email"
+        )
+        
+        print(f"📧 Success alert result: {result}")
+        return result
+    
     async def _send_slack_alert(self, message: str, severity: str, **kwargs) -> bool:
         """Send alert to Slack"""
         if not self.slack_webhook_url:

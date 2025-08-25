@@ -50,42 +50,28 @@ A comprehensive monitoring dashboard for CI/CD pipeline health, supporting GitHu
 - pip or uv package manager
 - Modern web browser
 
-### Quick Start
+## 🚀 Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd cicd-health-dashboard
-   ```
+### **One Command Setup (Recommended)**
+```bash
+# Clone the repository
+git clone https://github.com/velu-vm/cicd-health-dashboard.git
+cd cicd-health-dashboard
 
-2. **Set up Python environment**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+# Run the comprehensive setup script (handles everything automatically)
+./setup.sh
+```
 
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+**That's it!** The setup script will:
+- ✅ Create virtual environment
+- ✅ Install all dependencies  
+- ✅ Generate configuration files
+- ✅ Start the server
+- ✅ Test all functionality
+- ✅ Provide next steps
 
-4. **Initialize database**
-   ```bash
-   cd backend
-   python init_db.py
-   ```
-
-5. **Start the backend**
-   ```bash
-   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
-6. **Open the frontend**
-   - Navigate to `frontend/` directory
-   - Open `index.html` in your browser
-   - Or serve with a simple HTTP server: `python -m http.server 8080`
+### **Manual Setup (Advanced Users)**
+If you prefer to set up manually, see [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed instructions.
 
 ## 🔧 Configuration
 

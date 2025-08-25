@@ -1,113 +1,176 @@
-# 📧 **Email Setup Guide for CI/CD Dashboard**
+# Email Alert Setup for CI/CD Dashboard
 
-## 🔐 **GitHub Secrets Configuration (Recommended)**
+This guide explains how to configure email notifications for your CI/CD Health Dashboard.
 
-Instead of hardcoding email credentials, store them securely in GitHub Secrets:
+## 🎯 What You'll Get
 
-### **Required GitHub Secrets:**
+- **Success Notifications**: Email when pipelines complete successfully
+- **Failure Alerts**: Immediate email notifications when pipelines fail
+- **Real-time Updates**: Alerts sent as soon as GitHub Actions completes
+- **Complete Coverage**: You'll get notified for EVERY pipeline result (success/failure)
 
-1. **`SMTP_USERNAME`**
-   - Value: Your Gmail address (e.g., `renugavelmurugan09@gmail.com`)
+## 📧 Email Configuration
 
-2. **`SMTP_PASSWORD`**
-   - Value: Your Gmail App Password (NOT your regular password)
+### **Option 1: Gmail (Recommended for Testing)**
 
-3. **`ALERT_DEFAULT_RECIPIENT`**
-   - Value: Default email for alerts (e.g., `renugavelmurugan09@gmail.com`)
+1. **Enable 2-Factor Authentication**:
+   - Go to [Google Account Settings](https://myaccount.google.com/security)
+   - Enable 2-Step Verification
 
-4. **`ALERT_TEST_RECIPIENT`**
-   - Value: Email for test alerts (e.g., `renugavelmurugan09@gmail.com`)
+2. **Generate App Password**:
+   - Go to [App Passwords](https://myaccount.google.com/apppasswords)
+   - Select "Mail" and "Other (Custom name)"
+   - Name it "CI/CD Dashboard"
+   - Copy the generated 16-character password
 
-### **How to Add GitHub Secrets:**
+3. **Update Your .env File**:
+   ```bash
+   ALERTS_ENABLED=true
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USERNAME=your-email@gmail.com
+   SMTP_PASSWORD=your-16-char-app-password
+   SMTP_FROM_EMAIL=noreply@cicd-dashboard.com
+   SMTP_FROM_NAME=CI/CD Dashboard
+   ALERT_DEFAULT_RECIPIENT=renugavelmurugan09@gmail.com
+   ```
 
-1. Go to: `https://github.com/velu-vm/cicd-health-dashboard/settings/secrets/actions`
-2. Click "New repository secret"
-3. Add each secret with the exact names above
+### **Option 2: Other SMTP Providers**
 
-## 🚀 **Local Development Setup**
-
-For local development, create a `.env` file:
-
+#### **Outlook/Hotmail**:
 ```bash
-# Email Configuration
-ALERTS_ENABLED=true
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USERNAME=renugavelmurugan09@gmail.com
-SMTP_PASSWORD=YOUR_APP_PASSWORD_HERE
-SMTP_FROM_EMAIL=renugavelmurugan09@gmail.com
-SMTP_FROM_NAME=CI/CD Dashboard
-
-# Alert Recipients
-ALERT_DEFAULT_RECIPIENT=renugavelmurugan09@gmail.com
-ALERT_TEST_RECIPIENT=renugavelmurugan09@gmail.com
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@outlook.com
+SMTP_PASSWORD=your-password
 ```
 
-## 🔑 **Gmail App Password Setup**
-
-### **Step 1: Enable 2-Factor Authentication**
-1. Go to [Google Account Settings](https://myaccount.google.com/security)
-2. Enable "2-Step Verification"
-
-### **Step 2: Generate App Password**
-1. Go to [Google Account Security](https://myaccount.google.com/apppasswords)
-2. Select "Mail" and "Other (Custom name)"
-3. Name: "CI/CD Dashboard"
-4. Click "Generate"
-5. Copy the 16-character password
-
-### **Step 3: Update Configuration**
-- Replace `YOUR_APP_PASSWORD_HERE` with the generated password
-- **Never use your regular Gmail password**
-
-## 🧪 **Test Email Notifications**
-
-### **Test with Backend Running:**
+#### **Yahoo Mail**:
 ```bash
-curl -X POST http://localhost:8000/api/alert/test \
+SMTP_HOST=smtp.mail.yahoo.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@yahoo.com
+SMTP_PASSWORD=your-app-password
+```
+
+#### **Custom SMTP Server**:
+```bash
+SMTP_HOST=your-smtp-server.com
+SMTP_PORT=587
+SMTP_USERNAME=your-username
+SMTP_PASSWORD=your-password
+```
+
+## 🔧 Testing Email Configuration
+
+### **1. Test with the Dashboard**:
+1. Open your dashboard at `http://localhost:8000`
+2. Click the "Test Alert" button in the Alert Configuration section
+3. Check your email for the test message
+
+### **2. Test via API**:
+```bash
+curl -X POST "http://localhost:8000/api/alert/test" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer d447e5b2466828ddda9eed4da0597577" \
-  -d '{"message": "Test email notification", "severity": "info"}'
+  -d '{"message": "Test email alert", "severity": "info"}'
 ```
 
-### **Expected Response:**
-```json
-{
-  "success": true,
-  "message": "Alert test completed successfully to renugavelmurugan09@gmail.com"
-}
+### **3. Test with Real Pipeline**:
+1. Make a commit and push to your repository
+2. Watch the GitHub Actions pipeline run
+3. Check your email for success/failure notifications
+
+## 📋 GitHub Repository Secrets
+
+Add these secrets to your GitHub repository:
+
+1. **Go to**: Repository → Settings → Secrets and variables → Actions
+2. **Add these secrets**:
+
+| Secret Name | Value | Description |
+|-------------|-------|-------------|
+| `DASHBOARD_WEBHOOK_URL` | `https://your-ngrok-url` | Public dashboard URL |
+| `DASHBOARD_WRITE_KEY` | Your dashboard WRITE_KEY | Authentication token |
+
+## 🚀 How It Works
+
+### **Pipeline Flow**:
+1. **Push Code** → GitHub Actions starts
+2. **Pipeline Running** → Dashboard shows "running" status
+3. **Pipeline Completes** → Dashboard updates status
+4. **Email Sent** → Success/failure notification delivered
+
+### **Email Triggers**:
+- ✅ **Success**: Pipeline completes successfully (sends success notification)
+- ❌ **Failure**: Pipeline fails (tests fail, build errors, etc.) (sends failure alert)
+- ⏱️ **Running**: Pipeline starts (optional notification)
+- 📧 **Complete Coverage**: You receive alerts for ALL pipeline results
+
+## 🔍 Troubleshooting
+
+### **Email Not Sending**:
+1. Check `.env` file has correct SMTP settings
+2. Verify `ALERTS_ENABLED=true`
+3. Check server logs for SMTP errors
+4. Test SMTP connection manually
+
+### **Gmail Issues**:
+1. Ensure 2FA is enabled
+2. Use App Password, not regular password
+3. Check if "Less secure app access" is disabled (should be)
+
+### **Webhook Issues**:
+1. Verify GitHub secrets are set correctly
+2. Check dashboard logs for webhook errors
+3. Ensure ngrok URL is accessible
+
+## 📱 Email Format
+
+**Success Email Subject**: `CI/CD Dashboard Alert - INFO`
+
+**Success Email Body**:
 ```
+CI/CD Health Dashboard Alert
 
-## 🔍 **Troubleshooting**
+Severity: INFO
+Time: 2025-08-25 15:30:00
 
-### **Email Not Sending?**
-1. ✅ Check if `ALERTS_ENABLED=true`
-2. ✅ Verify Gmail app password is correct
-3. ✅ Ensure 2FA is enabled on Gmail
-4. ✅ Check backend logs for SMTP errors
-
-### **Common Errors:**
-- **535 Authentication Failed**: Wrong app password
-- **Connection Refused**: Check SMTP port (465 for SSL, 587 for TLS)
-- **SSL/TLS Error**: Verify port and SSL settings
-
-## 🚨 **Security Best Practices**
-
-1. **Never commit credentials** to your repository
-2. **Use GitHub Secrets** for production deployments
-3. **Use App Passwords** instead of regular passwords
-4. **Rotate app passwords** regularly
-5. **Monitor email usage** in Gmail
-
-## 📋 **Environment Variables Reference**
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SMTP_USERNAME` | Gmail address | `renugavelmurugan09@gmail.com` |
-| `SMTP_PASSWORD` | Gmail app password | `abcd efgh ijkl mnop` |
-| `ALERT_DEFAULT_RECIPIENT` | Default alert email | `renugavelmurugan09@gmail.com` |
-| `ALERT_TEST_RECIPIENT` | Test alert email | `renugavelmurugan09@gmail.com` |
+Message:
+✅ Build #123456789 succeeded on GitHub Actions
+Branch: main
+Triggered by: username
+Duration: 1800s
+URL: https://github.com/repo/actions/runs/123456789
 
 ---
+This is an automated alert from the CI/CD Health Dashboard.
+```
 
-**🎉 Your email notifications are now properly configured with environment variables and GitHub secrets!**
+**Failure Email Subject**: `CI/CD Dashboard Alert - ERROR`
+
+**Failure Email Body**:
+```
+CI/CD Health Dashboard Alert
+
+Severity: ERROR
+Time: 2025-08-25 15:30:00
+
+Message:
+🚨 Build #123456789 failed on GitHub Actions
+Branch: main
+Triggered by: username
+Duration: 1800s
+URL: https://github.com/repo/actions/runs/123456789
+
+---
+This is an automated alert from the CI/CD Health Dashboard.
+```
+
+## 🎉 Next Steps
+
+1. **Configure your .env file** with email settings
+2. **Set up GitHub repository secrets**
+3. **Test with a commit/push**
+4. **Check your email for notifications**
+
+Your CI/CD pipeline will now work normally and send email alerts for real success/failure results!
