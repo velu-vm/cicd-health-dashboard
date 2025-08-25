@@ -28,27 +28,27 @@ A comprehensive dashboard for monitoring CI/CD pipeline health with real-time em
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   GitHub        │    │   Backend API   │    │   Email         │
-│   Actions       │───▶│   (FastAPI)     │───▶│   Notifications │
-│   (Webhooks)    │    │   Port: 8000    │    │   (SMTP)        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │   Frontend      │
-                       │   Dashboard     │
-                       │   (HTML/JS)    │
-                       │   Port: 8000    │
-                       └─────────────────┘
+┌─────────────────┐    ┌─────────────────────────────────────────┐    ┌─────────────────┐
+│   GitHub        │    │           Backend Server                │    │   Email         │
+│   Actions       │───▶│         (FastAPI + Frontend)           │───▶│   Notifications │
+│   (Webhooks)    │    │         Port: 8000                     │    │   (SMTP)        │
+└─────────────────┘    │  ┌─────────────┐  ┌─────────────────┐ │    └─────────────────┘
+                       │  │  Frontend   │  │   REST API      │ │
+                       │  │  Dashboard  │  │   Endpoints     │ │
+                       │  │  (HTML/JS)  │  │   (/api/*)      │ │
+                       │  └─────────────┘  └─────────────────┘ │
+                       └─────────────────────────────────────────┘
 ```
 
+**Note**: The backend FastAPI server serves both the frontend dashboard and provides REST API endpoints on the same port (8000).
+
 ### Frontend & Backend Details
-- **Frontend**: Single-page dashboard at `http://localhost:8000`
-- **Backend**: FastAPI server at `http://localhost:8000/api`
-- **Port**: Both frontend and backend run on port 8000
+- **Frontend**: Single-page dashboard served by backend at `http://localhost:8000`
+- **Backend**: FastAPI server that serves both frontend and API at `http://localhost:8000`
+- **Port**: Single port 8000 serves everything
 - **Database**: SQLite database with async SQLAlchemy
 - **Real-time Updates**: Auto-refresh every 15 seconds
+- **Architecture**: Backend serves frontend HTML + provides REST API endpoints
 
 ## 📋 Prerequisites
 
@@ -185,10 +185,10 @@ Each email includes:
 ## 🌐 Quick Access Links
 
 ### Local Development URLs
-- **Frontend Dashboard**: http://localhost:8000
-- **Backend API Base**: http://localhost:8000/api
-- **Interactive API Docs**: http://localhost:8000/docs
-- **Health Status**: http://localhost:8000/health
+- **Main Dashboard**: http://localhost:8000 (Frontend + Backend)
+- **API Endpoints**: http://localhost:8000/api/* (Backend API)
+- **Interactive API Docs**: http://localhost:8000/docs (Backend Documentation)
+- **Health Status**: http://localhost:8000/health (Backend Health Check)
 
 ### Key API Endpoints
 - **Builds List**: http://localhost:8000/api/builds
